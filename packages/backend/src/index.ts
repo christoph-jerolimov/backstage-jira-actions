@@ -69,4 +69,7 @@ backend.add(import('@backstage/plugin-signals-backend'));
 // mcp actions plugin
 backend.add(import('@backstage/plugin-mcp-actions-backend'));
 
+// jira actions plugin
+backend.add(import('backstage-plugin-jira-actions-backend'));
+
 backend.start();

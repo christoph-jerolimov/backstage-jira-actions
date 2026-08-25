@@ -34,7 +34,7 @@ See proposal.md for motivation. Facts that shape the design:
 
 `plugins/jira-actions-backend`, package name `backstage-plugin-jira-actions-backend` (repo uses `UNLICENSED` private packages), plugin ID `jira`. A `node` library split (`jira-actions-node`) is not warranted for this size; the connection service and client live inside the plugin's `src/lib/`.
 
-*Alternative considered*: separate `jira-actions-common`/`-node` packages — rejected as premature for two actions.
+_Alternative considered_: separate `jira-actions-common`/`-node` packages — rejected as premature for two actions.
 
 ### D2: Read `connections` config directly, mirroring the framework contract
 
@@ -45,7 +45,8 @@ A `JiraConnectionsReader` parses the top-level `connections` array from the root
 - Expose `find(options: { host?: string; authMethods?: ('basic' | 'pat')[] })` returning a resolved connection; no `host` → first configured Jira connection; no match → `NotFoundError` with a config-pointing message. This mirrors `ConnectionsService.find({type, query, authMethods})` from `@backstage/connections`, so migrating later means deleting the reader and delegating to the framework service.
 - Config schema: the plugin ships `config.d.ts` declaring the `connections` array loosely (`type: string` + passthrough) with `@visibility secret` on `apiToken`/`token`, so `config:check` accepts the section and secrets are masked. Deep visibility declarations only apply to the jira-specific fields we declare.
 
-*Alternatives considered*:
+_Alternatives considered_:
+
 - Plugin-scoped config like `jira.connections` — rejected: the user explicitly asked for the new connections configuration, and top-level `connections` is where operators will expect all external connections to live.
 - Depending on `@backstage/connections` and calling `buildConnectionsFromConfig` — rejected: it throws `Unrecognised connection type "jira"`, and the package's exports are churning (0.3.0 made the service internal).
 
@@ -58,7 +59,7 @@ The plugin depends on `actionsRegistryServiceRef` from `@backstage/backend-plugi
 
 Action names are registered unprefixed; the registry namespaces them with the plugin ID (final IDs like `jira:create-work-item`). `app-config.yaml` adds `jira` to `backend.actions.pluginSources` so the actions surface through the actions service and MCP.
 
-*Alternative considered*: scaffolder actions — rejected: scaffolder actions only run inside templates; the actions registry is what MCP consumes and what the user asked for.
+_Alternative considered_: scaffolder actions — rejected: scaffolder actions only run inside templates; the actions registry is what MCP consumes and what the user asked for.
 
 ### D4: Minimal hand-rolled Jira REST client
 
@@ -72,7 +73,7 @@ Field mapping details:
 - Error handling: non-2xx responses raise typed errors from `@backstage/errors` (404 → `NotFoundError`, 400 → `InputError` including Jira's `errors`/`errorMessages` payload, 401/403 → `NotAllowedError`), never echoing the Authorization header.
 - Output `url`: `https://<host>/browse/<key>`.
 
-*Alternative considered*: `jira.js` npm SDK — rejected: large dependency for two endpoints, and its auth/model types fight the connection abstraction.
+_Alternative considered_: `jira.js` npm SDK — rejected: large dependency for two endpoints, and its auth/model types fight the connection abstraction.
 
 ### D5: Testing strategy
 

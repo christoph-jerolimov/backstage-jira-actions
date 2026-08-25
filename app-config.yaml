@@ -130,6 +130,7 @@ backend:
       - auth
       - catalog
       - scaffolder
+      - jira
   # workingDirectory: /tmp # Use this to configure a working directory for the scaffolder, defaults to the OS temp-dir
 
 integrations:
@@ -223,6 +224,20 @@ kubernetes:
 permission:
   # setting this to `false` will disable permissions
   enabled: true
+
+# External service connections (BEP-14 style), used by the jira actions plugin
+# for its `type: jira` entries. See plugins/jira-actions-backend/README.md
+# connections:
+#   - type: jira
+#     host: mycompany.atlassian.net
+#     # apiBaseUrl: https://mycompany.atlassian.net # defaults to https://<host>
+#     # product: cloud # or "datacenter", defaults to "cloud"
+#     auth:
+#       - method: basic # Jira Cloud: account email + API token
+#         username: ${JIRA_USERNAME}
+#         apiToken: ${JIRA_API_TOKEN}
+#       # - method: pat # Jira Data Center: personal access token
+#       #   token: ${JIRA_TOKEN}
 
 # see https://backstage.io/docs/ai/mcp-actions for more details
 mcpActions:
