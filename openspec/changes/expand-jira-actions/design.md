@@ -11,12 +11,14 @@ See proposal.md for motivation. This builds directly on the archived `add-jira-w
 - Six new actions on the existing plugin, each in its own `src/actions/*.ts` module following the established `register*Action({ actionsRegistry, connections })` pattern.
 - All Jira specifics (endpoints, product differences, ADF conversion) stay in `JiraClient`/`lib`; action modules only map inputs to client calls and shape outputs.
 - Outputs stay flat and plain-text so MCP/AI consumers can use them without understanding Jira's response shapes.
+- A manual test surface in the Backstage UI: one software template per action (all eight), each running the real registry action end-to-end.
 
 **Non-Goals:**
 
 - No pagination cursors surfaced to callers (bounded `maxResults` only; a follow-up can add token/offset paging if needed).
 - No comment reading/listing, attachment handling, custom fields, or issue linking.
-- No changes to `jira-connections` behavior, backend wiring, or config surface.
+- No changes to `jira-connections` behavior or the connections config surface.
+- The templates are test/demo fixtures, not production workflows — no fetch/publish steps, no entity registration, no per-template access control.
 
 ## Decisions
 
@@ -58,9 +60,30 @@ _Alternative considered_: always require raw JQL — rejected; JQL syntax errors
 | add-comment          | false    | false      | false       |
 | transition-work-item | false    | true       | false       |
 
-### D6: Testing strategy
+### D6: One generic scaffolder bridge action, in a separate scaffolder module
+
+Template steps run scaffolder actions, not registry actions, so testing registry actions from templates needs a bridge. A new package `plugins/scaffolder-backend-module-jira-actions` (role `backend-plugin-module`, pluginId `scaffolder`, moduleId `jira-actions`) registers **one** generic scaffolder action `jira:action:invoke` via `scaffolderActionsExtensionPoint`, with input `{actionId, input?}`. It depends on `actionsServiceRef` (`@backstage/backend-plugin-api/alpha`) — the same service the MCP backend uses — and calls `actions.invoke({ id: actionId, input, credentials: await ctx.getInitiatorCredentials() })`, writing the returned output to the step output `result`. Since the module runs inside the scaffolder plugin, the actions service resolves actions from the plugins in `backend.actions.pluginSources`, which already includes `jira-actions`.
+
+Guardrail: `actionId` must start with `jira-actions:` — anything else is an `InputError` before invocation. The bridge exists to test this plugin's actions, not to become a generic invoke-anything scaffolder action.
+
+_Alternative considered_: eight dedicated scaffolder actions (one per registry action) — rejected: pure duplication of the registry's schemas; the registry already validates input, and the templates provide the per-action typed surface. Also considered registering scaffolder actions from inside `jira-actions-backend` — rejected: scaffolder actions must be contributed by a module of the scaffolder plugin, not by another plugin.
+
+### D7: Template fixtures under `examples/`, one per action
+
+Eight `Template` entities live in `examples/jira-actions-templates/` (`create-work-item.yaml`, …, `list-issue-types.yaml`), plus an `all.yaml` `Location` entity listing them, registered once in `app-config.yaml` under `catalog.locations` with a `Template, Location` rule — same pattern as the existing example template. Each template follows one shape:
+
+- `metadata`: name `jira-test-<action>`, tagged `jira` + `test`, title/description taken from the action.
+- `parameters`: one form page mirroring the action's input schema — required fields required, optional fields optional, same descriptions; array inputs (`labels`) as string arrays, `maxResults` as number with the action's default.
+- `steps`: a single step `id: invoke` running `jira:action:invoke` with the hardcoded `actionId` for that template and `input` assembled from `${{ parameters.* }}`.
+- `output`: `text` block rendering the step's `result` as pretty-printed JSON, and for the issue-scoped actions (create, update, get, comment, transition) a `links` entry pointing at `${{ steps.invoke.output.result.url }}`.
+
+Optional parameters left empty in the form are omitted from `input` via the scaffolder's `${{ ... }}` handling so the registry's zod validation sees them as absent, not empty strings — templates use conditional includes where needed.
+
+### D8: Testing strategy
 
 Same pattern as the existing suites: msw handlers asserting method/path/query/body per product for the new client methods (including the Cloud `search/jql` vs Data Center `search` split), pure unit tests for `adfToText` and `buildJql`, and action-level tests through `actionsRegistryServiceMock` covering each spec scenario (including transition no-op, unreachable status listing, and the jql/filters conflict). The `lists both actions` discovery test is updated to expect all eight actions and assert the read-only attributes.
+
+For the bridge: unit tests with `createMockActionContext` from `@backstage/plugin-scaffolder-node-test-utils` and a mocked actions service, covering invocation pass-through, the namespace guardrail, and error propagation. For the templates: a jest test that loads each YAML fixture, checks it parses as a `Template` with a `jira:action:invoke` step whose `actionId` matches the file, and asserts required action inputs appear as required template parameters; full-form UI behavior is covered by the boot smoke test plus manual runs rather than e2e automation.
 
 ## Risks / Trade-offs
 
@@ -70,10 +93,13 @@ Same pattern as the existing suites: msw handlers asserting method/path/query/bo
 - [`GET /project/{key}` issue types include workflow-invalid types in some Jira setups] → Accepted; `create-work-item` still surfaces Jira's 400 with details if an unusable type is chosen.
 - [ADF→text is lossy for complex documents (tables, media)] → By design; documented in the README as plain-text rendering.
 
+- [The bridge lets any template author invoke Jira write actions with the service credential] → Same trust boundary as the actions/MCP endpoints today (allow-all permission policy); the `jira-actions:` namespace restriction keeps the blast radius to this plugin, and real permission policies remain the documented follow-up.
+- [Scaffolder templating of empty optional parameters could send empty strings to the registry] → Templates conditionally include optional inputs; the template fixture tests assert required-vs-optional wiring.
+
 ## Migration Plan
 
-Purely additive to the existing plugin: merge, restart backend. No config, wiring, or schema changes; existing actions are untouched. Rollback = revert the commit.
+Additive: merge, `yarn install` (new workspace package), restart backend. Config changes are limited to the new `catalog.locations` entry for the templates; existing actions are untouched. Rollback = revert the commit (removing the module from `packages/backend/src/index.ts` and the catalog location with it).
 
 ## Open Questions
 
-None — naming (`search-work-items` plural) and scope were settled in the proposal.
+None — naming (`search-work-items` plural), scope, and the template test surface were settled in the proposal.

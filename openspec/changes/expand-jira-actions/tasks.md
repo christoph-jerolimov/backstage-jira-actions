@@ -23,3 +23,10 @@
 - [ ] 4.1 Register all new actions in `src/plugin.ts` and update the discovery test to expect all eight actions with read-only attributes on the four read actions; verify the updated test passes.
 - [ ] 4.2 Update the plugin `README.md` action table and add usage notes (JQL vs filters, transition semantics, plain-text ADF rendering); verify `yarn prettier --check` passes on the plugin.
 - [ ] 4.3 Run the verification suite — `yarn tsc`, plugin lint and tests, `yarn build:backend` — and boot-smoke-test the backend confirming all eight actions register; verify all pass.
+
+## 5. Test templates (spec: jira-action-templates)
+
+- [ ] 5.1 Create the `plugins/scaffolder-backend-module-jira-actions` package (role `backend-plugin-module`, pluginId `scaffolder`, moduleId `jira-actions`) registering the `jira:action:invoke` scaffolder action that invokes registry actions via `actionsServiceRef` with initiator credentials, guarded to the `jira-actions:` namespace; verify with `createMockActionContext` unit tests for pass-through, namespace rejection, and error propagation.
+- [ ] 5.2 Write the eight template fixtures in `examples/jira-actions-templates/` (one per action, parameters mirroring the action inputs, single `jira:action:invoke` step, JSON result text output and issue link where the output has a `url`) plus the `all.yaml` location file; verify with a jest test that parses each fixture and asserts the step actionId and required-parameter wiring.
+- [ ] 5.3 Wire the module into `packages/backend` (package.json + `src/index.ts`) and register the template location in `app-config.yaml` under `catalog.locations`; verify `yarn tsc` and `yarn build:backend` pass.
+- [ ] 5.4 Boot-smoke-test the backend and verify the scaffolder lists the `jira:action:invoke` action (installed-actions endpoint or startup logs) and the catalog ingests the eight templates without errors.
