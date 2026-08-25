@@ -1,10 +1,12 @@
-# jira-action-templates Specification
+## REMOVED Requirements
 
-## Purpose
+### Requirement: Scaffolder bridge action invokes Jira registry actions
 
-Lets every Jira registry action be exercised end-to-end from the Backstage software templates UI: one test template per action collects the action's inputs as parameters, invokes the registry action directly as its template step, and surfaces its output.
+**Reason**: The scaffolder exposes Actions Registry actions directly as template actions for every plugin listed in `backend.actions.pluginSources`, so the `jira:action:invoke` bridge duplicates framework behavior and adds an unnecessary indirection to every template step.
 
-## Requirements
+**Migration**: Template steps use the registry action id directly as the step `action` (e.g. `action: jira-actions:list-issue-types`) with the action's input as the step `input`, and read the action's output fields directly from the step output (e.g. `${{ steps.<id>.output.url }}`) instead of the nested `result` object.
+
+## MODIFIED Requirements
 
 ### Requirement: One test template per Jira action
 

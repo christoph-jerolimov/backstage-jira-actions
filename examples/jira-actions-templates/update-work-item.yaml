@@ -48,24 +48,22 @@ spec:
   steps:
     - id: invoke
       name: 'Update work item'
-      action: jira:action:invoke
+      action: jira-actions:update-work-item
       input:
-        actionId: jira-actions:update-work-item
-        input:
-          issueKey: ${{ parameters.issueKey }}
-          summary: ${{ parameters.summary }}
-          description: '${{ parameters.description }}'
-          labels: ${{ parameters.labels }}
-          assignee: ${{ parameters.assignee }}
-          issueType: ${{ parameters.issueType }}
-          host: ${{ parameters.host }}
+        issueKey: ${{ parameters.issueKey }}
+        summary: ${{ parameters.summary }}
+        description: '${{ parameters.description }}'
+        labels: ${{ parameters.labels }}
+        assignee: ${{ parameters.assignee }}
+        issueType: ${{ parameters.issueType }}
+        host: ${{ parameters.host }}
   output:
     links:
       - title: Open issue
-        url: ${{ steps.invoke.output.result.url }}
+        url: ${{ steps.invoke.output.url }}
     text:
       - title: Result
         content: |
           ```json
-          ${{ steps.invoke.output.result | dump }}
+          ${{ steps.invoke.output | dump }}
           ```

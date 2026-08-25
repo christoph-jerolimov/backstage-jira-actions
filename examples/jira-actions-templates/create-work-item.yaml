@@ -58,26 +58,24 @@ spec:
   steps:
     - id: invoke
       name: 'Create work item'
-      action: jira:action:invoke
+      action: jira-actions:create-work-item
       input:
-        actionId: jira-actions:create-work-item
-        input:
-          projectKey: ${{ parameters.projectKey }}
-          entityRef: ${{ parameters.entityRef }}
-          issueType: ${{ parameters.issueType }}
-          summary: ${{ parameters.summary }}
-          description: '${{ parameters.description }}'
-          labels: ${{ parameters.labels }}
-          assignee: ${{ parameters.assignee }}
-          parentKey: ${{ parameters.parentKey }}
-          host: ${{ parameters.host }}
+        projectKey: ${{ parameters.projectKey }}
+        entityRef: ${{ parameters.entityRef }}
+        issueType: ${{ parameters.issueType }}
+        summary: ${{ parameters.summary }}
+        description: '${{ parameters.description }}'
+        labels: ${{ parameters.labels }}
+        assignee: ${{ parameters.assignee }}
+        parentKey: ${{ parameters.parentKey }}
+        host: ${{ parameters.host }}
   output:
     links:
       - title: Open issue
-        url: ${{ steps.invoke.output.result.url }}
+        url: ${{ steps.invoke.output.url }}
     text:
       - title: Result
         content: |
           ```json
-          ${{ steps.invoke.output.result | dump }}
+          ${{ steps.invoke.output | dump }}
           ```

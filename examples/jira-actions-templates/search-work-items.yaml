@@ -59,24 +59,22 @@ spec:
   steps:
     - id: invoke
       name: 'Search work items'
-      action: jira:action:invoke
+      action: jira-actions:search-work-items
       input:
-        actionId: jira-actions:search-work-items
-        input:
-          jql: ${{ parameters.jql }}
-          projectKey: ${{ parameters.projectKey }}
-          entityRef: ${{ parameters.entityRef }}
-          text: ${{ parameters.text }}
-          status: ${{ parameters.status }}
-          issueType: ${{ parameters.issueType }}
-          assignee: ${{ parameters.assignee }}
-          labels: ${{ parameters.labels }}
-          maxResults: ${{ parameters.maxResults }}
-          host: ${{ parameters.host }}
+        jql: ${{ parameters.jql }}
+        projectKey: ${{ parameters.projectKey }}
+        entityRef: ${{ parameters.entityRef }}
+        text: ${{ parameters.text }}
+        status: ${{ parameters.status }}
+        issueType: ${{ parameters.issueType }}
+        assignee: ${{ parameters.assignee }}
+        labels: ${{ parameters.labels }}
+        maxResults: ${{ parameters.maxResults }}
+        host: ${{ parameters.host }}
   output:
     text:
       - title: Result
         content: |
           ```json
-          ${{ steps.invoke.output.result | dump }}
+          ${{ steps.invoke.output | dump }}
           ```

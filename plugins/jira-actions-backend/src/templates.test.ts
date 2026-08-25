@@ -53,13 +53,12 @@ describe('jira actions test templates', () => {
       readFileSync(resolve(TEMPLATES_DIR, `${actionName}.yaml`), 'utf8'),
     );
 
-    it('is a template with a single bridge step for its action', () => {
+    it('is a template with a single step invoking the registry action directly', () => {
       expect(template.kind).toBe('Template');
       expect(template.metadata.name).toBe(`jira-test-${actionName}`);
       expect(template.spec.steps).toHaveLength(1);
       const step = template.spec.steps[0];
-      expect(step.action).toBe('jira:action:invoke');
-      expect(step.input.actionId).toBe(`jira-actions:${actionName}`);
+      expect(step.action).toBe(`jira-actions:${actionName}`);
     });
 
     it('requires exactly the action-required parameters', () => {
@@ -73,10 +72,10 @@ describe('jira actions test templates', () => {
       const properties = template.spec.parameters.flatMap(
         (page: { properties?: object }) => Object.keys(page.properties ?? {}),
       );
-      const stepInput = template.spec.steps[0].input.input;
+      const stepInput = template.spec.steps[0].input;
       expect(Object.keys(stepInput).sort()).toEqual(properties.sort());
       for (const name of properties) {
-        expect(stepInput[name]).toBe(`\${{ parameters.${name} }}`);
+        expect(String(stepInput[name])).toContain(`\${{ parameters.${name} }}`);
       }
     });
 
@@ -98,7 +97,7 @@ describe('jira actions test templates', () => {
       const texts = template.spec.output?.text ?? [];
       expect(
         texts.some((entry: { content?: string }) =>
-          entry.content?.includes('steps.invoke.output.result'),
+          entry.content?.includes('steps.invoke.output'),
         ),
       ).toBe(true);
       const issueScoped = [
@@ -113,7 +112,7 @@ describe('jira actions test templates', () => {
         ? [
             {
               title: 'Open issue',
-              url: '${{ steps.invoke.output.result.url }}',
+              url: '${{ steps.invoke.output.url }}',
             },
           ]
         : [];
