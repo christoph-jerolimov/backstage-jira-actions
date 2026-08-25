@@ -20,7 +20,12 @@ spec:
         projectKey:
           title: 'Project key'
           type: string
-          description: 'Filter: the Jira project key, e.g. PROJ'
+          description: 'Filter: the Jira project key, e.g. PROJ; provide either this or a catalog entity'
+        entityRef:
+          title: 'Catalog entity'
+          type: string
+          description: 'A catalog entity whose jira/project-key annotation identifies the project; alternative to the project key'
+          ui:field: EntityPicker
         text:
           title: 'Text'
           type: string
@@ -60,6 +65,7 @@ spec:
         input:
           jql: ${{ parameters.jql }}
           projectKey: ${{ parameters.projectKey }}
+          entityRef: ${{ parameters.entityRef }}
           text: ${{ parameters.text }}
           status: ${{ parameters.status }}
           issueType: ${{ parameters.issueType }}

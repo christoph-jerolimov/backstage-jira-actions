@@ -69,6 +69,33 @@ connections:
 - Invalid `type: jira` entries fail backend startup with a descriptive error;
   entries of other connection types are ignored by this plugin.
 
+## Catalog annotations
+
+The project-scoped actions (`create-work-item`, `search-work-items`,
+`list-issue-types`) accept an `entityRef` input (e.g.
+`component:default/my-service`) as an alternative to `projectKey` — provide
+exactly one of the two. The entity is looked up in the software catalog with
+the caller's credentials and must carry the `jira/project-key` annotation:
+
+```yaml
+apiVersion: backstage.io/v1alpha1
+kind: Component
+metadata:
+  name: my-service
+  annotations:
+    jira/project-key: PROJ
+    # Optional, for setups with multiple Jira connections: selects the
+    # connection when the action's "host" input is not given.
+    jira/host: jira.mycompany.com
+spec:
+  type: service
+  owner: my-team
+  lifecycle: production
+```
+
+An explicit `host` input always wins over the `jira/host` annotation. The
+annotation value is treated as a single project key.
+
 To expose the actions over MCP, add the plugin ID to the actions sources:
 
 ```yaml

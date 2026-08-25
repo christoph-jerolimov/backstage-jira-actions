@@ -1,18 +1,22 @@
 import { ActionsRegistryService } from '@backstage/backend-plugin-api/alpha';
+import { InputError } from '@backstage/errors';
+import { CatalogService } from '@backstage/plugin-catalog-node';
 import { JiraClient } from '../lib/JiraClient';
 import { JiraConnectionsReader } from '../lib/connections';
+import { resolveEntityProject } from '../lib/entityProject';
 
 export function registerCreateWorkItemAction(options: {
   actionsRegistry: ActionsRegistryService;
   connections: JiraConnectionsReader;
+  catalog: CatalogService;
 }) {
-  const { actionsRegistry, connections } = options;
+  const { actionsRegistry, connections, catalog } = options;
 
   actionsRegistry.register({
     name: 'create-work-item',
     title: 'Create Jira Work Item',
     description:
-      'Creates a new work item (issue) such as a Story, Bug or Task in a Jira project, and returns its key and URL.',
+      'Creates a new work item (issue) such as a Story, Bug or Task in a Jira project, and returns its key and URL. The project is identified by exactly one of "projectKey" and "entityRef".',
     attributes: {
       readOnly: false,
       destructive: false,
@@ -23,8 +27,15 @@ export function registerCreateWorkItemAction(options: {
         z.object({
           projectKey: z
             .string()
+            .optional()
             .describe(
-              'The key of the Jira project to create the issue in, e.g. "PROJ"',
+              'The key of the Jira project to create the issue in, e.g. "PROJ"; alternative to "entityRef"',
+            ),
+          entityRef: z
+            .string()
+            .optional()
+            .describe(
+              'A catalog entity ref, e.g. "component:default/my-service", whose "jira/project-key" annotation identifies the project; alternative to "projectKey"',
             ),
           issueType: z
             .string()
@@ -56,7 +67,7 @@ export function registerCreateWorkItemAction(options: {
             .string()
             .optional()
             .describe(
-              'The Jira host to target when multiple Jira connections are configured; defaults to the first configured connection',
+              'The Jira host to target when multiple Jira connections are configured; defaults to the entity\'s "jira/host" annotation or the first configured connection',
             ),
         }),
       output: z =>
@@ -68,10 +79,35 @@ export function registerCreateWorkItemAction(options: {
           url: z.string().describe('A browseable URL of the created issue'),
         }),
     },
-    action: async ({ input, logger }) => {
-      const connection = connections.find({ host: input.host });
+    action: async ({ input, credentials, logger }) => {
+      if (
+        (input.projectKey === undefined) ===
+        (input.entityRef === undefined)
+      ) {
+        throw new InputError(
+          'Provide exactly one of "projectKey" and "entityRef"',
+        );
+      }
+      let projectKey = input.projectKey;
+      let annotationHost: string | undefined;
+      if (input.entityRef !== undefined) {
+        const resolved = await resolveEntityProject({
+          catalog,
+          entityRef: input.entityRef,
+          credentials,
+        });
+        projectKey = resolved.projectKey;
+        annotationHost = resolved.host;
+      }
+
+      const connection = connections.find({
+        host: input.host ?? annotationHost,
+      });
       const client = new JiraClient(connection);
-      const issue = await client.createIssue(input);
+      const issue = await client.createIssue({
+        ...input,
+        projectKey: projectKey!,
+      });
       logger.info(`Created Jira issue ${issue.key} on ${connection.host}`);
       return { output: issue };
     },

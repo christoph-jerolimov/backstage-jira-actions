@@ -1,12 +1,16 @@
 import { ActionsRegistryService } from '@backstage/backend-plugin-api/alpha';
+import { InputError } from '@backstage/errors';
+import { CatalogService } from '@backstage/plugin-catalog-node';
 import { JiraClient } from '../lib/JiraClient';
 import { JiraConnectionsReader } from '../lib/connections';
+import { resolveEntityProject } from '../lib/entityProject';
 
 export function registerListIssueTypesAction(options: {
   actionsRegistry: ActionsRegistryService;
   connections: JiraConnectionsReader;
+  catalog: CatalogService;
 }) {
-  const { actionsRegistry, connections } = options;
+  const { actionsRegistry, connections, catalog } = options;
 
   actionsRegistry.register({
     name: 'list-issue-types',
@@ -23,12 +27,21 @@ export function registerListIssueTypesAction(options: {
         z.object({
           projectKey: z
             .string()
-            .describe('The Jira project key to list issue types for'),
+            .optional()
+            .describe(
+              'The Jira project key to list issue types for; alternative to "entityRef"',
+            ),
+          entityRef: z
+            .string()
+            .optional()
+            .describe(
+              'A catalog entity ref, e.g. "component:default/my-service", whose "jira/project-key" annotation identifies the project; alternative to "projectKey"',
+            ),
           host: z
             .string()
             .optional()
             .describe(
-              'The Jira host to target when multiple Jira connections are configured; defaults to the first configured connection',
+              'The Jira host to target when multiple Jira connections are configured; defaults to the entity\'s "jira/host" annotation or the first configured connection',
             ),
         }),
       output: z =>
@@ -50,10 +63,32 @@ export function registerListIssueTypesAction(options: {
             .describe("The project's issue types"),
         }),
     },
-    action: async ({ input }) => {
-      const connection = connections.find({ host: input.host });
+    action: async ({ input, credentials }) => {
+      if (
+        (input.projectKey === undefined) ===
+        (input.entityRef === undefined)
+      ) {
+        throw new InputError(
+          'Provide exactly one of "projectKey" and "entityRef"',
+        );
+      }
+      let projectKey = input.projectKey;
+      let annotationHost: string | undefined;
+      if (input.entityRef !== undefined) {
+        const resolved = await resolveEntityProject({
+          catalog,
+          entityRef: input.entityRef,
+          credentials,
+        });
+        projectKey = resolved.projectKey;
+        annotationHost = resolved.host;
+      }
+
+      const connection = connections.find({
+        host: input.host ?? annotationHost,
+      });
       const client = new JiraClient(connection);
-      const issueTypes = await client.getProjectIssueTypes(input.projectKey);
+      const issueTypes = await client.getProjectIssueTypes(projectKey!);
       return { output: { issueTypes } };
     },
   });
