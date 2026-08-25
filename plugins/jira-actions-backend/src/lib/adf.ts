@@ -1,3 +1,4 @@
+import { InputError } from '@backstage/errors';
 import { JsonObject } from '@backstage/types';
 import { Lexer, Token, Tokens } from 'marked';
 
@@ -389,4 +390,70 @@ export function adfToMarkdown(value: unknown): string | undefined {
     return undefined;
   }
   return renderMarkdownBlocks(doc.content);
+}
+
+/**
+ * The formats a rich-text input (description, comment body) can be given in.
+ */
+export type RichTextFormat = 'markdown' | 'adf' | 'text';
+
+/**
+ * Parses and structurally validates an ADF document input, given either as
+ * an object or as a JSON-encoded string.
+ */
+export function parseAdfInput(value: string | JsonObject): JsonObject {
+  let doc: unknown = value;
+  if (typeof value === 'string') {
+    try {
+      doc = JSON.parse(value);
+    } catch (error) {
+      throw new InputError(
+        `Rich text input with format "adf" is not valid JSON: ${error}`,
+      );
+    }
+  }
+  const candidate = doc as { type?: unknown; content?: unknown } | null;
+  if (
+    typeof candidate !== 'object' ||
+    candidate === null ||
+    Array.isArray(candidate) ||
+    candidate.type !== 'doc' ||
+    !Array.isArray(candidate.content)
+  ) {
+    throw new InputError(
+      'Rich text input with format "adf" must be an ADF document: an object with type "doc" and a content array',
+    );
+  }
+  return candidate as JsonObject;
+}
+
+/**
+ * Converts a rich-text input to the value written to Jira, according to the
+ * selected format and the target product. On Jira Cloud, markdown is
+ * converted to ADF, text becomes literal paragraphs, and adf documents are
+ * validated and passed through; on Jira Data Center strings pass through
+ * unchanged and adf is rejected, since Data Center has no ADF.
+ */
+export function toWriteValue(
+  value: string | JsonObject,
+  format: RichTextFormat,
+  isCloud: boolean,
+): string | JsonObject {
+  if (format === 'adf') {
+    if (!isCloud) {
+      throw new InputError(
+        'Rich text format "adf" requires a Jira Cloud connection',
+      );
+    }
+    return parseAdfInput(value);
+  }
+  if (typeof value !== 'string') {
+    throw new InputError(
+      `Rich text format "${format}" requires a string value`,
+    );
+  }
+  if (!isCloud) {
+    return value;
+  }
+  return format === 'text' ? textToAdf(value) : markdownToAdf(value);
 }

@@ -38,10 +38,16 @@ export function registerUpdateWorkItemAction(options: {
             .optional()
             .describe('The new summary (title) of the issue'),
           description: z
-            .string()
+            .union([z.string(), z.record(z.any())])
             .optional()
             .describe(
-              'The new Markdown description of the issue (headings, lists, fenced code blocks, links; converted to ADF on Jira Cloud)',
+              'The new issue description: a Markdown string by default, or per "descriptionFormat" an ADF document (object or JSON string) or literal plain text',
+            ),
+          descriptionFormat: z
+            .enum(['markdown', 'adf', 'text'])
+            .optional()
+            .describe(
+              'How to interpret "description": "markdown" (default, converted to ADF on Jira Cloud), "adf" (an ADF document, Jira Cloud only), or "text" (literal plain text)',
             ),
           labels: z
             .array(z.string())

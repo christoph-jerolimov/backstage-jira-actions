@@ -25,10 +25,10 @@ export function registerGetWorkItemAction(options: {
             .string()
             .describe('The key of the issue to read, e.g. "PROJ-123"'),
           descriptionFormat: z
-            .enum(['markdown', 'text'])
+            .enum(['markdown', 'adf', 'text'])
             .optional()
             .describe(
-              'How to render the description: "markdown" (default) or "text" for plain text with formatting dropped',
+              'How to render the description: "markdown" (default), "adf" for the raw ADF document, or "text" for plain text with formatting dropped',
             ),
           host: z
             .string()
@@ -45,10 +45,10 @@ export function registerGetWorkItemAction(options: {
           issueType: z.string().describe('The issue type name'),
           url: z.string().describe('A browseable URL of the issue'),
           description: z
-            .string()
+            .union([z.string(), z.record(z.any())])
             .optional()
             .describe(
-              'The issue description, rendered as Markdown by default or plain text when descriptionFormat is "text"',
+              'The issue description in the requested format: Markdown by default, the raw ADF document for "adf", or plain text for "text"',
             ),
           assignee: z
             .string()

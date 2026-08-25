@@ -25,9 +25,15 @@ export function registerAddCommentAction(options: {
             .string()
             .describe('The key of the issue to comment on, e.g. "PROJ-123"'),
           body: z
-            .string()
+            .union([z.string(), z.record(z.any())])
             .describe(
-              'The Markdown comment body (converted to ADF on Jira Cloud)',
+              'The comment body: a Markdown string by default, or per "bodyFormat" an ADF document (object or JSON string) or literal plain text',
+            ),
+          bodyFormat: z
+            .enum(['markdown', 'adf', 'text'])
+            .optional()
+            .describe(
+              'How to interpret "body": "markdown" (default, converted to ADF on Jira Cloud), "adf" (an ADF document, Jira Cloud only), or "text" (literal plain text)',
             ),
           host: z
             .string()
@@ -46,7 +52,11 @@ export function registerAddCommentAction(options: {
     action: async ({ input, logger }) => {
       const connection = connections.find({ host: input.host });
       const client = new JiraClient(connection);
-      const result = await client.addComment(input.issueKey, input.body);
+      const result = await client.addComment(
+        input.issueKey,
+        input.body,
+        input.bodyFormat ?? 'markdown',
+      );
       logger.info(
         `Added comment ${result.commentId} to Jira issue ${result.key} on ${connection.host}`,
       );

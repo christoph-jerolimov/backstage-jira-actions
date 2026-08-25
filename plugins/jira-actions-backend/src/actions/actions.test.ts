@@ -1019,3 +1019,136 @@ describe('markdown descriptions', () => {
     expect(asText.output.description).toBe('Steps\nreproduce it');
   });
 });
+
+describe('rich text format inputs', () => {
+  const server = setupServer();
+  registerMswTestHooks(server);
+
+  const adfDoc = {
+    type: 'doc',
+    version: 1,
+    content: [
+      { type: 'paragraph', content: [{ type: 'text', text: 'verbatim' }] },
+    ],
+  };
+
+  it('create-work-item writes an adf description verbatim', async () => {
+    let received: any;
+    server.use(
+      http.post(
+        'https://example.atlassian.net/rest/api/3/issue',
+        async ({ request }) => {
+          received = await request.json();
+          return HttpResponse.json({ id: '1', key: 'PROJ-1' }, { status: 201 });
+        },
+      ),
+    );
+
+    await makeRegistry([cloudConnection]).invoke({
+      id: 'test:create-work-item',
+      input: {
+        projectKey: 'PROJ',
+        issueType: 'Bug',
+        summary: 'x',
+        description: adfDoc,
+        descriptionFormat: 'adf',
+      },
+    });
+
+    expect(received.fields.description).toEqual(adfDoc);
+  });
+
+  it('add-comment accepts a JSON-string adf body', async () => {
+    let received: any;
+    server.use(
+      http.post(
+        'https://example.atlassian.net/rest/api/3/issue/PROJ-1/comment',
+        async ({ request }) => {
+          received = await request.json();
+          return HttpResponse.json({ id: '5' }, { status: 201 });
+        },
+      ),
+    );
+
+    await makeRegistry([cloudConnection]).invoke({
+      id: 'test:add-comment',
+      input: {
+        issueKey: 'PROJ-1',
+        body: JSON.stringify(adfDoc),
+        bodyFormat: 'adf',
+      },
+    });
+
+    expect(received.body).toEqual(adfDoc);
+  });
+
+  it('update-work-item writes literal text without markdown parsing', async () => {
+    let received: any;
+    server.use(
+      http.put(
+        'https://example.atlassian.net/rest/api/3/issue/PROJ-1',
+        async ({ request }) => {
+          received = await request.json();
+          return new HttpResponse(null, { status: 204 });
+        },
+      ),
+    );
+
+    await makeRegistry([cloudConnection]).invoke({
+      id: 'test:update-work-item',
+      input: {
+        issueKey: 'PROJ-1',
+        description: '# not a heading',
+        descriptionFormat: 'text',
+      },
+    });
+
+    expect(received.fields.description.content).toEqual([
+      {
+        type: 'paragraph',
+        content: [{ type: 'text', text: '# not a heading' }],
+      },
+    ]);
+  });
+
+  it('rejects adf on a datacenter connection', async () => {
+    await expect(
+      makeRegistry([datacenterConnection]).invoke({
+        id: 'test:add-comment',
+        input: { issueKey: 'OPS-1', body: adfDoc, bodyFormat: 'adf' },
+      }),
+    ).rejects.toThrow(/"adf" requires a Jira Cloud connection/);
+  });
+
+  it('rejects an update with only descriptionFormat as a modifier', async () => {
+    await expect(
+      makeRegistry([cloudConnection]).invoke({
+        id: 'test:update-work-item',
+        input: { issueKey: 'PROJ-1', descriptionFormat: 'text' },
+      }),
+    ).rejects.toThrow(/At least one field to update must be provided/);
+  });
+
+  it('get-work-item returns the raw adf document on request', async () => {
+    server.use(
+      http.get('https://example.atlassian.net/rest/api/3/issue/PROJ-1', () =>
+        HttpResponse.json({
+          key: 'PROJ-1',
+          fields: {
+            summary: 'x',
+            status: { name: 'To Do' },
+            issuetype: { name: 'Bug' },
+            description: adfDoc,
+          },
+        }),
+      ),
+    );
+
+    const result = (await makeRegistry([cloudConnection]).invoke({
+      id: 'test:get-work-item',
+      input: { issueKey: 'PROJ-1', descriptionFormat: 'adf' },
+    })) as { output: { description?: unknown } };
+
+    expect(result.output.description).toEqual(adfDoc);
+  });
+});

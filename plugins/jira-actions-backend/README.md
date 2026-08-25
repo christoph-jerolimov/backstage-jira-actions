@@ -31,16 +31,20 @@ Usage notes:
   against the issue's currently available transitions. If the issue already
   has the target status the action succeeds without changes; if the status is
   unreachable, the error lists the statuses that are reachable.
-- Descriptions and comment bodies are Markdown. On Jira Cloud a supported
+- Descriptions and comment bodies carry a format selector
+  (`descriptionFormat` on create/update, `bodyFormat` on add-comment):
+  `markdown` (default), `adf`, or `text`. With `markdown`, a supported
   subset — headings, bullet/ordered lists, fenced code blocks (with
   language), blockquotes, and inline bold/italic/code/links — is converted
-  to real ADF, and anything outside the subset degrades to plain text. On
-  Jira Data Center the string is passed through unchanged (Data Center uses
-  wiki markup).
-- `get-work-item` renders Cloud descriptions back as Markdown by default;
-  pass `descriptionFormat: text` for plain text with formatting dropped
-  (ADF nodes outside the subset, such as tables and mentions, degrade to
-  their text content either way).
+  to real ADF on Jira Cloud, and anything outside the subset degrades to
+  plain text. With `text`, the string is stored literally with no Markdown
+  interpretation. With `adf`, the input is an ADF document (an object, or a
+  JSON-encoded string) sent to Jira verbatim — Jira Cloud only. On Jira
+  Data Center strings pass through unchanged and `adf` is rejected.
+- `get-work-item` renders Cloud descriptions back per `descriptionFormat`:
+  Markdown by default, the raw ADF document for `adf`, or plain text for
+  `text` (ADF nodes outside the Markdown subset, such as tables and
+  mentions, degrade to their text content in the string renderings).
 
 ## Configuration
 

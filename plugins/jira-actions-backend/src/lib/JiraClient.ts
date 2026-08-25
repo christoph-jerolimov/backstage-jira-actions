@@ -1,6 +1,6 @@
 import { InputError, NotAllowedError, NotFoundError } from '@backstage/errors';
 import { JsonObject } from '@backstage/types';
-import { adfToMarkdown, adfToText, markdownToAdf } from './adf';
+import { adfToMarkdown, adfToText, RichTextFormat, toWriteValue } from './adf';
 import { JiraConnection } from './connections';
 
 /**
@@ -8,7 +8,8 @@ import { JiraConnection } from './connections';
  */
 export type JiraWorkItemFields = {
   summary?: string;
-  description?: string;
+  description?: string | JsonObject;
+  descriptionFormat?: RichTextFormat;
   labels?: string[];
   assignee?: string;
   issueType?: string;
@@ -30,7 +31,7 @@ export type JiraWorkItem = {
   status: string;
   issueType: string;
   url: string;
-  description?: string;
+  description?: string | JsonObject;
   assignee?: string;
   labels?: string[];
   parentKey?: string;
@@ -160,7 +161,7 @@ export class JiraClient {
 
   async getIssue(
     issueKey: string,
-    options?: { descriptionFormat?: 'markdown' | 'text' },
+    options?: { descriptionFormat?: RichTextFormat },
   ): Promise<JiraWorkItem> {
     const response = await this.request(
       'GET',
@@ -185,10 +186,10 @@ export class JiraClient {
     const fields = issue.fields ?? {};
     return {
       ...this.toSearchItem(issue),
-      description:
-        options?.descriptionFormat === 'text'
-          ? adfToText(fields.description)
-          : adfToMarkdown(fields.description),
+      description: this.toReadDescription(
+        fields.description,
+        options?.descriptionFormat ?? 'markdown',
+      ),
       labels:
         fields.labels && fields.labels.length > 0 ? fields.labels : undefined,
       parentKey: fields.parent?.key,
@@ -222,14 +223,15 @@ export class JiraClient {
 
   async addComment(
     issueKey: string,
-    commentBody: string,
+    commentBody: string | JsonObject,
+    bodyFormat: RichTextFormat = 'markdown',
   ): Promise<{ key: string; commentId: string; url: string }> {
     const response = await this.request(
       'POST',
       `/issue/${encodeURIComponent(issueKey)}/comment`,
       {
         body: {
-          body: this.isCloud ? markdownToAdf(commentBody) : commentBody,
+          body: toWriteValue(commentBody, bodyFormat, this.isCloud),
         },
       },
     );
@@ -336,6 +338,23 @@ export class JiraClient {
     }));
   }
 
+  private toReadDescription(
+    description: unknown,
+    format: RichTextFormat,
+  ): string | JsonObject | undefined {
+    if (format === 'adf') {
+      if (typeof description === 'string') {
+        return description;
+      }
+      return typeof description === 'object' && description !== null
+        ? (description as JsonObject)
+        : undefined;
+    }
+    return format === 'text'
+      ? adfToText(description)
+      : adfToMarkdown(description);
+  }
+
   private toSearchItem(issue: RawIssue): JiraSearchItem {
     const fields = issue.fields ?? {};
     const assignee = this.isCloud
@@ -357,9 +376,11 @@ export class JiraClient {
       fields.issuetype = { name: input.issueType };
     }
     if (input.description !== undefined) {
-      fields.description = this.isCloud
-        ? markdownToAdf(input.description)
-        : input.description;
+      fields.description = toWriteValue(
+        input.description,
+        input.descriptionFormat ?? 'markdown',
+        this.isCloud,
+      );
     }
     if (input.labels !== undefined) {
       fields.labels = input.labels;

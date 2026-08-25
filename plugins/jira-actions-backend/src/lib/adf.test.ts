@@ -1,4 +1,11 @@
-import { adfToMarkdown, adfToText, markdownToAdf, textToAdf } from './adf';
+import {
+  adfToMarkdown,
+  adfToText,
+  markdownToAdf,
+  parseAdfInput,
+  textToAdf,
+  toWriteValue,
+} from './adf';
 
 describe('textToAdf', () => {
   it('wraps lines into paragraphs', () => {
@@ -311,5 +318,74 @@ describe('adfToMarkdown', () => {
     const markdown = adfToMarkdown(doc);
     expect(markdown).toContain('cell');
     expect(markdown).toContain('after');
+  });
+});
+
+describe('toWriteValue', () => {
+  const adfDoc = {
+    type: 'doc',
+    version: 1,
+    content: [{ type: 'paragraph', content: [{ type: 'text', text: 'x' }] }],
+  };
+
+  it('converts markdown on cloud and passes it through on datacenter', () => {
+    expect(toWriteValue('# Title', 'markdown', true)).toEqual({
+      type: 'doc',
+      version: 1,
+      content: [
+        {
+          type: 'heading',
+          attrs: { level: 1 },
+          content: [{ type: 'text', text: 'Title' }],
+        },
+      ],
+    });
+    expect(toWriteValue('# Title', 'markdown', false)).toBe('# Title');
+  });
+
+  it('keeps text literal on cloud and passes it through on datacenter', () => {
+    expect(toWriteValue('# not a heading', 'text', true)).toEqual({
+      type: 'doc',
+      version: 1,
+      content: [
+        {
+          type: 'paragraph',
+          content: [{ type: 'text', text: '# not a heading' }],
+        },
+      ],
+    });
+    expect(toWriteValue('# not a heading', 'text', false)).toBe(
+      '# not a heading',
+    );
+  });
+
+  it('passes adf documents through as objects or JSON strings', () => {
+    expect(toWriteValue(adfDoc, 'adf', true)).toEqual(adfDoc);
+    expect(toWriteValue(JSON.stringify(adfDoc), 'adf', true)).toEqual(adfDoc);
+  });
+
+  it('rejects adf on datacenter', () => {
+    expect(() => toWriteValue(adfDoc, 'adf', false)).toThrow(
+      /"adf" requires a Jira Cloud connection/,
+    );
+  });
+
+  it('rejects invalid adf inputs', () => {
+    expect(() => toWriteValue('not json', 'adf', true)).toThrow(
+      /not valid JSON/,
+    );
+    expect(() => toWriteValue({ type: 'paragraph' }, 'adf', true)).toThrow(
+      /must be an ADF document/,
+    );
+    expect(() => parseAdfInput('[]')).toThrow(/must be an ADF document/);
+  });
+
+  it('rejects non-string values for markdown and text', () => {
+    expect(() => toWriteValue(adfDoc, 'markdown', true)).toThrow(
+      /"markdown" requires a string value/,
+    );
+    expect(() => toWriteValue(adfDoc, 'text', false)).toThrow(
+      /"text" requires a string value/,
+    );
   });
 });

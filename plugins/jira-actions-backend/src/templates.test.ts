@@ -28,6 +28,14 @@ const ENTITY_REF_ACTIONS = [
   'list-issue-types',
 ];
 
+// Actions whose templates carry a rich-text format selector.
+const FORMAT_PARAMS: Record<string, string> = {
+  'create-work-item': 'descriptionFormat',
+  'update-work-item': 'descriptionFormat',
+  'add-comment': 'bodyFormat',
+  'get-work-item': 'descriptionFormat',
+};
+
 const ACTION_NAMES = Object.keys(REQUIRED_INPUTS);
 
 describe('jira actions test templates', () => {
@@ -91,6 +99,19 @@ describe('jira actions test templates', () => {
         ? 'EntityPicker'
         : undefined;
       expect(entityRef?.['ui:field']).toBe(expected);
+    });
+
+    it('offers the rich text format enum where applicable', () => {
+      const param = FORMAT_PARAMS[actionName];
+      const properties = template.spec.parameters.flatMap(
+        (page: { properties?: Record<string, any> }) =>
+          Object.entries(page.properties ?? {}),
+      );
+      const formatProperty = properties.find(
+        ([name]: [string, any]) => name === param,
+      )?.[1];
+      const expected = param ? ['markdown', 'adf', 'text'] : undefined;
+      expect(formatProperty?.enum).toEqual(expected);
     });
 
     it('renders the result and links to the issue where the output has a url', () => {

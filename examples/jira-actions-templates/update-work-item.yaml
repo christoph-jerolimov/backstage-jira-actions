@@ -26,7 +26,15 @@ spec:
         description:
           title: 'New description'
           type: string
-          description: 'The new Markdown description of the issue'
+          description: 'The new Markdown description of the issue (or ADF as JSON, or literal text, per the description format)'
+        descriptionFormat:
+          title: 'Description format'
+          type: string
+          description: 'How to interpret the description: markdown (default), adf, or text'
+          enum:
+            - markdown
+            - adf
+            - text
         labels:
           title: 'Labels'
           type: array
@@ -53,6 +61,7 @@ spec:
         issueKey: ${{ parameters.issueKey }}
         summary: ${{ parameters.summary }}
         description: '${{ parameters.description }}'
+        descriptionFormat: ${{ parameters.descriptionFormat }}
         labels: ${{ parameters.labels }}
         assignee: ${{ parameters.assignee }}
         issueType: ${{ parameters.issueType }}

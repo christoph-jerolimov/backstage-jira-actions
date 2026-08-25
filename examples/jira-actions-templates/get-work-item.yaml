@@ -22,9 +22,10 @@ spec:
         descriptionFormat:
           title: 'Description format'
           type: string
-          description: 'How to render the description: markdown (default) or text'
+          description: 'How to render the description: markdown (default), adf, or text'
           enum:
             - markdown
+            - adf
             - text
         host:
           title: 'Jira host'
