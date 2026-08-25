@@ -40,7 +40,9 @@ export function registerUpdateWorkItemAction(options: {
           description: z
             .string()
             .optional()
-            .describe('The new plain-text description of the issue'),
+            .describe(
+              'The new Markdown description of the issue (headings, lists, fenced code blocks, links; converted to ADF on Jira Cloud)',
+            ),
           labels: z
             .array(z.string())
             .optional()

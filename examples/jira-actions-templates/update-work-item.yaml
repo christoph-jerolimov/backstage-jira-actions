@@ -26,7 +26,7 @@ spec:
         description:
           title: 'New description'
           type: string
-          description: 'The new plain-text description of the issue'
+          description: 'The new Markdown description of the issue'
         labels:
           title: 'Labels'
           type: array

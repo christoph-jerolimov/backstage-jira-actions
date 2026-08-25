@@ -46,7 +46,9 @@ export function registerCreateWorkItemAction(options: {
           description: z
             .string()
             .optional()
-            .describe('A plain-text description of the issue'),
+            .describe(
+              'A Markdown description of the issue (headings, lists, fenced code blocks, links; converted to ADF on Jira Cloud)',
+            ),
           labels: z
             .array(z.string())
             .optional()

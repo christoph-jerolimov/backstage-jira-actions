@@ -23,7 +23,7 @@ spec:
         body:
           title: 'Comment'
           type: string
-          description: 'The plain-text comment body'
+          description: 'The Markdown comment body'
         host:
           title: 'Jira host'
           type: string

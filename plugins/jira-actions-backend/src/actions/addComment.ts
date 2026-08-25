@@ -12,7 +12,7 @@ export function registerAddCommentAction(options: {
     name: 'add-comment',
     title: 'Add Comment to Jira Work Item',
     description:
-      'Adds a plain-text comment to an existing Jira work item (issue).',
+      'Adds a comment to an existing Jira work item (issue). The body is Markdown, converted to ADF on Jira Cloud.',
     attributes: {
       readOnly: false,
       destructive: false,
@@ -24,7 +24,11 @@ export function registerAddCommentAction(options: {
           issueKey: z
             .string()
             .describe('The key of the issue to comment on, e.g. "PROJ-123"'),
-          body: z.string().describe('The plain-text comment body'),
+          body: z
+            .string()
+            .describe(
+              'The Markdown comment body (converted to ADF on Jira Cloud)',
+            ),
           host: z
             .string()
             .optional()

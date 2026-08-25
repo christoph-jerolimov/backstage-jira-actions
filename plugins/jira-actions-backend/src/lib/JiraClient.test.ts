@@ -76,11 +76,11 @@ describe('JiraClient', () => {
           content: [
             {
               type: 'paragraph',
-              content: [{ type: 'text', text: 'First line' }],
-            },
-            {
-              type: 'paragraph',
-              content: [{ type: 'text', text: 'Second line' }],
+              content: [
+                { type: 'text', text: 'First line' },
+                { type: 'hardBreak' },
+                { type: 'text', text: 'Second line' },
+              ],
             },
           ],
         },
@@ -582,5 +582,80 @@ describe('JiraClient', () => {
         new JiraClient(cloudConnection).getProjectIssueTypes('NOPE'),
       ).rejects.toThrow(/get Jira project NOPE, status 404/);
     });
+  });
+});
+
+describe('JiraClient markdown handling', () => {
+  const server = setupServer();
+  registerMswTestHooks(server);
+
+  const formattedAdf = {
+    type: 'doc',
+    version: 1,
+    content: [
+      {
+        type: 'heading',
+        attrs: { level: 2 },
+        content: [{ type: 'text', text: 'Steps' }],
+      },
+      {
+        type: 'bulletList',
+        content: [
+          {
+            type: 'listItem',
+            content: [
+              { type: 'paragraph', content: [{ type: 'text', text: 'first' }] },
+            ],
+          },
+        ],
+      },
+    ],
+  };
+
+  it('converts markdown descriptions to structured ADF on cloud', async () => {
+    let received: any;
+    server.use(
+      http.post(
+        'https://example.atlassian.net/rest/api/3/issue',
+        async ({ request }) => {
+          received = await request.json();
+          return HttpResponse.json({ id: '1', key: 'PROJ-1' }, { status: 201 });
+        },
+      ),
+    );
+
+    await new JiraClient(cloudConnection).createIssue({
+      projectKey: 'PROJ',
+      issueType: 'Bug',
+      summary: 'x',
+      description: '## Steps\n\n- first',
+    });
+
+    expect(received.fields.description).toEqual(formattedAdf);
+  });
+
+  it('reads descriptions back as markdown by default and text on request', async () => {
+    server.use(
+      http.get('https://example.atlassian.net/rest/api/3/issue/PROJ-1', () =>
+        HttpResponse.json({
+          key: 'PROJ-1',
+          fields: {
+            summary: 'x',
+            status: { name: 'To Do' },
+            issuetype: { name: 'Bug' },
+            description: formattedAdf,
+          },
+        }),
+      ),
+    );
+
+    const client = new JiraClient(cloudConnection);
+    const asMarkdown = await client.getIssue('PROJ-1');
+    expect(asMarkdown.description).toBe('## Steps\n\n- first');
+
+    const asText = await client.getIssue('PROJ-1', {
+      descriptionFormat: 'text',
+    });
+    expect(asText.description).toBe('Steps\nfirst');
   });
 });

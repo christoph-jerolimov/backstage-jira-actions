@@ -19,6 +19,13 @@ spec:
           title: 'Issue key'
           type: string
           description: 'The key of the issue to read, e.g. PROJ-123'
+        descriptionFormat:
+          title: 'Description format'
+          type: string
+          description: 'How to render the description: markdown (default) or text'
+          enum:
+            - markdown
+            - text
         host:
           title: 'Jira host'
           type: string
@@ -29,6 +36,7 @@ spec:
       action: jira-actions:get-work-item
       input:
         issueKey: ${{ parameters.issueKey }}
+        descriptionFormat: ${{ parameters.descriptionFormat }}
         host: ${{ parameters.host }}
   output:
     links:

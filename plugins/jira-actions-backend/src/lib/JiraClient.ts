@@ -1,6 +1,6 @@
 import { InputError, NotAllowedError, NotFoundError } from '@backstage/errors';
 import { JsonObject } from '@backstage/types';
-import { adfToText, textToAdf } from './adf';
+import { adfToMarkdown, adfToText, markdownToAdf } from './adf';
 import { JiraConnection } from './connections';
 
 /**
@@ -158,7 +158,10 @@ export class JiraClient {
     return { key: issueKey, url: this.browseUrl(issueKey) };
   }
 
-  async getIssue(issueKey: string): Promise<JiraWorkItem> {
+  async getIssue(
+    issueKey: string,
+    options?: { descriptionFormat?: 'markdown' | 'text' },
+  ): Promise<JiraWorkItem> {
     const response = await this.request(
       'GET',
       `/issue/${encodeURIComponent(issueKey)}`,
@@ -182,7 +185,10 @@ export class JiraClient {
     const fields = issue.fields ?? {};
     return {
       ...this.toSearchItem(issue),
-      description: adfToText(fields.description),
+      description:
+        options?.descriptionFormat === 'text'
+          ? adfToText(fields.description)
+          : adfToMarkdown(fields.description),
       labels:
         fields.labels && fields.labels.length > 0 ? fields.labels : undefined,
       parentKey: fields.parent?.key,
@@ -223,7 +229,7 @@ export class JiraClient {
       `/issue/${encodeURIComponent(issueKey)}/comment`,
       {
         body: {
-          body: this.isCloud ? textToAdf(commentBody) : commentBody,
+          body: this.isCloud ? markdownToAdf(commentBody) : commentBody,
         },
       },
     );
@@ -352,7 +358,7 @@ export class JiraClient {
     }
     if (input.description !== undefined) {
       fields.description = this.isCloud
-        ? textToAdf(input.description)
+        ? markdownToAdf(input.description)
         : input.description;
     }
     if (input.labels !== undefined) {

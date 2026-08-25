@@ -944,3 +944,78 @@ describe('jira work item actions', () => {
     }
   });
 });
+
+describe('markdown descriptions', () => {
+  const server = setupServer();
+  registerMswTestHooks(server);
+
+  const formattedAdf = {
+    type: 'doc',
+    version: 1,
+    content: [
+      {
+        type: 'heading',
+        attrs: { level: 2 },
+        content: [{ type: 'text', text: 'Steps' }],
+      },
+      {
+        type: 'paragraph',
+        content: [{ type: 'text', text: 'reproduce it' }],
+      },
+    ],
+  };
+
+  it('create-work-item converts a markdown description to ADF', async () => {
+    let received: any;
+    server.use(
+      http.post(
+        'https://example.atlassian.net/rest/api/3/issue',
+        async ({ request }) => {
+          received = await request.json();
+          return HttpResponse.json({ id: '1', key: 'PROJ-9' }, { status: 201 });
+        },
+      ),
+    );
+
+    await makeRegistry([cloudConnection]).invoke({
+      id: 'test:create-work-item',
+      input: {
+        projectKey: 'PROJ',
+        issueType: 'Bug',
+        summary: 'x',
+        description: '## Steps\n\nreproduce it',
+      },
+    });
+
+    expect(received.fields.description).toEqual(formattedAdf);
+  });
+
+  it('get-work-item returns markdown by default and text on request', async () => {
+    server.use(
+      http.get('https://example.atlassian.net/rest/api/3/issue/PROJ-9', () =>
+        HttpResponse.json({
+          key: 'PROJ-9',
+          fields: {
+            summary: 'x',
+            status: { name: 'To Do' },
+            issuetype: { name: 'Bug' },
+            description: formattedAdf,
+          },
+        }),
+      ),
+    );
+
+    const registry = makeRegistry([cloudConnection]);
+    const asMarkdown = (await registry.invoke({
+      id: 'test:get-work-item',
+      input: { issueKey: 'PROJ-9' },
+    })) as { output: { description?: string } };
+    expect(asMarkdown.output.description).toBe('## Steps\n\nreproduce it');
+
+    const asText = (await registry.invoke({
+      id: 'test:get-work-item',
+      input: { issueKey: 'PROJ-9', descriptionFormat: 'text' },
+    })) as { output: { description?: string } };
+    expect(asText.output.description).toBe('Steps\nreproduce it');
+  });
+});

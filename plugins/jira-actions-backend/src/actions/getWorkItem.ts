@@ -12,7 +12,7 @@ export function registerGetWorkItemAction(options: {
     name: 'get-work-item',
     title: 'Get Jira Work Item',
     description:
-      'Reads a single Jira work item (issue) by its key, returning its summary, status, type, and other fields with the description rendered as plain text.',
+      'Reads a single Jira work item (issue) by its key, returning its summary, status, type, and other fields with the description rendered as Markdown (or plain text on request).',
     attributes: {
       readOnly: true,
       destructive: false,
@@ -24,6 +24,12 @@ export function registerGetWorkItemAction(options: {
           issueKey: z
             .string()
             .describe('The key of the issue to read, e.g. "PROJ-123"'),
+          descriptionFormat: z
+            .enum(['markdown', 'text'])
+            .optional()
+            .describe(
+              'How to render the description: "markdown" (default) or "text" for plain text with formatting dropped',
+            ),
           host: z
             .string()
             .optional()
@@ -41,7 +47,9 @@ export function registerGetWorkItemAction(options: {
           description: z
             .string()
             .optional()
-            .describe('The issue description as plain text'),
+            .describe(
+              'The issue description, rendered as Markdown by default or plain text when descriptionFormat is "text"',
+            ),
           assignee: z
             .string()
             .optional()
@@ -63,7 +71,11 @@ export function registerGetWorkItemAction(options: {
     action: async ({ input }) => {
       const connection = connections.find({ host: input.host });
       const client = new JiraClient(connection);
-      return { output: await client.getIssue(input.issueKey) };
+      return {
+        output: await client.getIssue(input.issueKey, {
+          descriptionFormat: input.descriptionFormat ?? 'markdown',
+        }),
+      };
     },
   });
 }
