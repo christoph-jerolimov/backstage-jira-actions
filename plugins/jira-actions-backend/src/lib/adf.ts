@@ -15,3 +15,69 @@ export function textToAdf(text: string): JsonObject {
     })),
   };
 }
+
+const BLOCK_NODE_TYPES = new Set([
+  'paragraph',
+  'heading',
+  'blockquote',
+  'codeBlock',
+  'bulletList',
+  'orderedList',
+  'listItem',
+  'panel',
+  'rule',
+  'table',
+  'tableRow',
+  'tableCell',
+  'tableHeader',
+  'mediaGroup',
+  'mediaSingle',
+]);
+
+type AdfNode = {
+  type?: unknown;
+  text?: unknown;
+  content?: unknown;
+};
+
+function renderNodes(nodes: unknown[]): string {
+  let out = '';
+  for (const value of nodes) {
+    const node = (value ?? {}) as AdfNode;
+    let text = '';
+    if (typeof node.text === 'string') {
+      text = node.text;
+    } else if (node.type === 'hardBreak') {
+      text = '\n';
+    } else if (Array.isArray(node.content)) {
+      text = renderNodes(node.content);
+    }
+    if (typeof node.type === 'string' && BLOCK_NODE_TYPES.has(node.type)) {
+      out = out.length > 0 ? `${out}\n${text}` : text;
+    } else {
+      out += text;
+    }
+  }
+  return out;
+}
+
+/**
+ * Renders a Jira rich-text field to plain text: Atlassian Document Format
+ * documents (Jira Cloud) have their text content extracted with block nodes
+ * separated by newlines, plain strings (Jira Data Center) pass through, and
+ * anything else yields `undefined`. Lossy by design — formatting, mentions,
+ * and media are dropped.
+ */
+export function adfToText(value: unknown): string | undefined {
+  if (typeof value === 'string') {
+    return value;
+  }
+  if (typeof value !== 'object' || value === null) {
+    return undefined;
+  }
+  const doc = value as AdfNode;
+  if (doc.type !== 'doc' || !Array.isArray(doc.content)) {
+    return undefined;
+  }
+  return renderNodes(doc.content);
+}

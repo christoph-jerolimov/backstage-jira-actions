@@ -1,0 +1,76 @@
+apiVersion: scaffolder.backstage.io/v1beta3
+kind: Template
+metadata:
+  name: 'jira-test-search-work-items'
+  title: 'Jira Test: Search Work Items'
+  description: 'Searches Jira work items by raw JQL or simplified filters via the jira-actions:search-work-items action. Provide either a JQL query or at least one filter.'
+  tags:
+    - jira
+    - test
+spec:
+  owner: user:guest
+  type: jira-test
+  parameters:
+    - title: Search work items
+      properties:
+        jql:
+          title: 'JQL query'
+          type: string
+          description: 'A raw JQL query, used as-is; must not be combined with the filters below'
+        projectKey:
+          title: 'Project key'
+          type: string
+          description: 'Filter: the Jira project key, e.g. PROJ'
+        text:
+          title: 'Text'
+          type: string
+          description: 'Filter: free-text match on summary and description'
+        status:
+          title: 'Status'
+          type: string
+          description: 'Filter: the status name, e.g. In Progress'
+        issueType:
+          title: 'Issue type'
+          type: string
+          description: 'Filter: the issue type name, e.g. Bug'
+        assignee:
+          title: 'Assignee'
+          type: string
+          description: 'Filter: the assignee (account ID on Cloud, username on Data Center)'
+        labels:
+          title: 'Labels'
+          type: array
+          description: 'Filter: issues carrying any of these labels'
+          items:
+            type: string
+        maxResults:
+          title: 'Maximum results'
+          type: number
+          description: 'Maximum number of results to return, default 25'
+        host:
+          title: 'Jira host'
+          type: string
+          description: 'Only needed when multiple Jira connections are configured'
+  steps:
+    - id: invoke
+      name: 'Search work items'
+      action: jira:action:invoke
+      input:
+        actionId: jira-actions:search-work-items
+        input:
+          jql: ${{ parameters.jql }}
+          projectKey: ${{ parameters.projectKey }}
+          text: ${{ parameters.text }}
+          status: ${{ parameters.status }}
+          issueType: ${{ parameters.issueType }}
+          assignee: ${{ parameters.assignee }}
+          labels: ${{ parameters.labels }}
+          maxResults: ${{ parameters.maxResults }}
+          host: ${{ parameters.host }}
+  output:
+    text:
+      - title: Result
+        content: |
+          ```json
+          ${{ steps.invoke.output.result | dump }}
+          ```

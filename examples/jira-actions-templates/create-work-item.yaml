@@ -1,0 +1,78 @@
+apiVersion: scaffolder.backstage.io/v1beta3
+kind: Template
+metadata:
+  name: 'jira-test-create-work-item'
+  title: 'Jira Test: Create Work Item'
+  description: 'Creates a Jira work item (issue) such as a Story, Bug or Task via the jira-actions:create-work-item action.'
+  tags:
+    - jira
+    - test
+spec:
+  owner: user:guest
+  type: jira-test
+  parameters:
+    - title: Create work item
+      required:
+        - projectKey
+        - issueType
+        - summary
+      properties:
+        projectKey:
+          title: 'Project key'
+          type: string
+          description: 'The key of the Jira project, e.g. PROJ'
+        issueType:
+          title: 'Issue type'
+          type: string
+          description: 'The issue type name, e.g. Story, Bug or Task'
+        summary:
+          title: 'Summary'
+          type: string
+          description: 'The summary (title) of the issue'
+        description:
+          title: 'Description'
+          type: string
+          description: 'A plain-text description of the issue'
+        labels:
+          title: 'Labels'
+          type: array
+          description: 'Labels to set on the issue'
+          items:
+            type: string
+        assignee:
+          title: 'Assignee'
+          type: string
+          description: 'A Jira account ID (Cloud) or username (Data Center)'
+        parentKey:
+          title: 'Parent issue key'
+          type: string
+          description: 'The key of a parent issue, for sub-tasks or issues under an epic'
+        host:
+          title: 'Jira host'
+          type: string
+          description: 'Only needed when multiple Jira connections are configured'
+  steps:
+    - id: invoke
+      name: 'Create work item'
+      action: jira:action:invoke
+      input:
+        actionId: jira-actions:create-work-item
+        input:
+          projectKey: ${{ parameters.projectKey }}
+          issueType: ${{ parameters.issueType }}
+          summary: ${{ parameters.summary }}
+          description: '${{ parameters.description }}'
+          labels: ${{ parameters.labels }}
+          assignee: ${{ parameters.assignee }}
+          parentKey: ${{ parameters.parentKey }}
+          host: ${{ parameters.host }}
+  output:
+    links:
+      - title: Open issue
+        url: ${{ steps.invoke.output.result.url }}
+    text:
+      - title: Result
+        content: |
+          ```json
+          ${{ steps.invoke.output.result | dump }}
+          ```

@@ -1,0 +1,101 @@
+import { readdirSync, readFileSync } from 'fs';
+import { resolve } from 'path';
+import { parse } from 'yaml';
+
+const TEMPLATES_DIR = resolve(
+  __dirname,
+  '../../../examples/jira-actions-templates',
+);
+
+// The required inputs of each registry action, which every test template
+// must ask for as required parameters.
+const REQUIRED_INPUTS: Record<string, string[]> = {
+  'create-work-item': ['projectKey', 'issueType', 'summary'],
+  'update-work-item': ['issueKey'],
+  'get-work-item': ['issueKey'],
+  'search-work-items': [],
+  'add-comment': ['issueKey', 'body'],
+  'transition-work-item': ['issueKey', 'status'],
+  'list-projects': [],
+  'list-issue-types': ['projectKey'],
+};
+
+const ACTION_NAMES = Object.keys(REQUIRED_INPUTS);
+
+describe('jira actions test templates', () => {
+  it('has one template file per action plus the location file', () => {
+    const files = readdirSync(TEMPLATES_DIR).sort();
+    expect(files).toEqual(
+      [...ACTION_NAMES.map(name => `${name}.yaml`), 'all.yaml'].sort(),
+    );
+  });
+
+  it('lists every template in the location file', () => {
+    const location = parse(
+      readFileSync(resolve(TEMPLATES_DIR, 'all.yaml'), 'utf8'),
+    );
+    expect(location.kind).toBe('Location');
+    expect([...location.spec.targets].sort()).toEqual(
+      ACTION_NAMES.map(name => `./${name}.yaml`).sort(),
+    );
+  });
+
+  describe.each(ACTION_NAMES)('%s.yaml', actionName => {
+    const template = parse(
+      readFileSync(resolve(TEMPLATES_DIR, `${actionName}.yaml`), 'utf8'),
+    );
+
+    it('is a template with a single bridge step for its action', () => {
+      expect(template.kind).toBe('Template');
+      expect(template.metadata.name).toBe(`jira-test-${actionName}`);
+      expect(template.spec.steps).toHaveLength(1);
+      const step = template.spec.steps[0];
+      expect(step.action).toBe('jira:action:invoke');
+      expect(step.input.actionId).toBe(`jira-actions:${actionName}`);
+    });
+
+    it('requires exactly the action-required parameters', () => {
+      const required = template.spec.parameters.flatMap(
+        (page: { required?: string[] }) => page.required ?? [],
+      );
+      expect(required.sort()).toEqual([...REQUIRED_INPUTS[actionName]].sort());
+    });
+
+    it('passes every declared parameter into the action input', () => {
+      const properties = template.spec.parameters.flatMap(
+        (page: { properties?: object }) => Object.keys(page.properties ?? {}),
+      );
+      const stepInput = template.spec.steps[0].input.input;
+      expect(Object.keys(stepInput).sort()).toEqual(properties.sort());
+      for (const name of properties) {
+        expect(stepInput[name]).toBe(`\${{ parameters.${name} }}`);
+      }
+    });
+
+    it('renders the result and links to the issue where the output has a url', () => {
+      const texts = template.spec.output?.text ?? [];
+      expect(
+        texts.some((entry: { content?: string }) =>
+          entry.content?.includes('steps.invoke.output.result'),
+        ),
+      ).toBe(true);
+      const issueScoped = [
+        'create-work-item',
+        'update-work-item',
+        'get-work-item',
+        'add-comment',
+        'transition-work-item',
+      ];
+      const links = template.spec.output?.links ?? [];
+      const expectedLinks = issueScoped.includes(actionName)
+        ? [
+            {
+              title: 'Open issue',
+              url: '${{ steps.invoke.output.result.url }}',
+            },
+          ]
+        : [];
+      expect(links).toEqual(expectedLinks);
+    });
+  });
+});

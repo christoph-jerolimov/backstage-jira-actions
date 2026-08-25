@@ -1,0 +1,50 @@
+apiVersion: scaffolder.backstage.io/v1beta3
+kind: Template
+metadata:
+  name: 'jira-test-transition-work-item'
+  title: 'Jira Test: Transition Work Item'
+  description: 'Moves a Jira work item to a target status via the jira-actions:transition-work-item action.'
+  tags:
+    - jira
+    - test
+spec:
+  owner: user:guest
+  type: jira-test
+  parameters:
+    - title: Transition work item
+      required:
+        - issueKey
+        - status
+      properties:
+        issueKey:
+          title: 'Issue key'
+          type: string
+          description: 'The key of the issue to transition, e.g. PROJ-123'
+        status:
+          title: 'Target status'
+          type: string
+          description: 'The target status name, e.g. In Progress'
+        host:
+          title: 'Jira host'
+          type: string
+          description: 'Only needed when multiple Jira connections are configured'
+  steps:
+    - id: invoke
+      name: 'Transition work item'
+      action: jira:action:invoke
+      input:
+        actionId: jira-actions:transition-work-item
+        input:
+          issueKey: ${{ parameters.issueKey }}
+          status: ${{ parameters.status }}
+          host: ${{ parameters.host }}
+  output:
+    links:
+      - title: Open issue
+        url: ${{ steps.invoke.output.result.url }}
+    text:
+      - title: Result
+        content: |
+          ```json
+          ${{ steps.invoke.output.result | dump }}
+          ```

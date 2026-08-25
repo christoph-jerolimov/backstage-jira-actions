@@ -7,14 +7,34 @@ so that they can be invoked through the actions service and — via
 
 ## Actions
 
-| Action ID                       | Description                                                                                     |
-| ------------------------------- | ----------------------------------------------------------------------------------------------- |
-| `jira-actions:create-work-item` | Creates a work item (issue) such as a Story, Bug or Task in a Jira project.                     |
-| `jira-actions:update-work-item` | Modifies fields (summary, description, labels, assignee, issue type) of an existing Jira issue. |
+| Action ID                           | Description                                                                                     |
+| ----------------------------------- | ----------------------------------------------------------------------------------------------- |
+| `jira-actions:create-work-item`     | Creates a work item (issue) such as a Story, Bug or Task in a Jira project.                     |
+| `jira-actions:update-work-item`     | Modifies fields (summary, description, labels, assignee, issue type) of an existing Jira issue. |
+| `jira-actions:get-work-item`        | Reads a single issue by key, with the description rendered as plain text. Read-only.            |
+| `jira-actions:search-work-items`    | Searches issues by raw JQL or simplified filters. Read-only.                                    |
+| `jira-actions:add-comment`          | Adds a plain-text comment to an issue.                                                          |
+| `jira-actions:transition-work-item` | Moves an issue to a target status by name via the matching workflow transition.                 |
+| `jira-actions:list-projects`        | Lists the visible Jira projects. Read-only.                                                     |
+| `jira-actions:list-issue-types`     | Lists the issue types available in a project. Read-only.                                        |
 
-Both actions accept an optional `host` input to select a specific Jira
+All actions accept an optional `host` input to select a specific Jira
 connection when more than one is configured; without it, the first configured
 Jira connection is used.
+
+Usage notes:
+
+- `search-work-items` takes either a raw `jql` input or simplified filters
+  (`projectKey`, `text`, `status`, `issueType`, `assignee`, `labels`) — not
+  both. Filters are compiled to JQL ordered by most recently updated.
+- `transition-work-item` matches the target status name (case-insensitively)
+  against the issue's currently available transitions. If the issue already
+  has the target status the action succeeds without changes; if the status is
+  unreachable, the error lists the statuses that are reachable.
+- Rich-text fields are plain text on both ends: descriptions and comment
+  bodies are written as simple ADF paragraphs on Jira Cloud, and Cloud
+  descriptions are read back as plain text (formatting, mentions, and media
+  are dropped).
 
 ## Configuration
 

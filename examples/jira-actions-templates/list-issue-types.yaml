@@ -1,0 +1,41 @@
+apiVersion: scaffolder.backstage.io/v1beta3
+kind: Template
+metadata:
+  name: 'jira-test-list-issue-types'
+  title: 'Jira Test: List Issue Types'
+  description: 'Lists the issue types available in a Jira project via the jira-actions:list-issue-types action.'
+  tags:
+    - jira
+    - test
+spec:
+  owner: user:guest
+  type: jira-test
+  parameters:
+    - title: List issue types
+      required:
+        - projectKey
+      properties:
+        projectKey:
+          title: 'Project key'
+          type: string
+          description: 'The Jira project key to list issue types for'
+        host:
+          title: 'Jira host'
+          type: string
+          description: 'Only needed when multiple Jira connections are configured'
+  steps:
+    - id: invoke
+      name: 'List issue types'
+      action: jira:action:invoke
+      input:
+        actionId: jira-actions:list-issue-types
+        input:
+          projectKey: ${{ parameters.projectKey }}
+          host: ${{ parameters.host }}
+  output:
+    text:
+      - title: Result
+        content: |
+          ```json
+          ${{ steps.invoke.output.result | dump }}
+          ```
