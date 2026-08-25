@@ -1,7 +1,9 @@
 import { ActionsRegistryService } from '@backstage/backend-plugin-api/alpha';
 import { InputError } from '@backstage/errors';
+import { CatalogService } from '@backstage/plugin-catalog-node';
 import { JiraClient } from '../lib/JiraClient';
 import { JiraConnectionsReader } from '../lib/connections';
+import { resolveEntityProject } from '../lib/entityProject';
 
 export type JiraSearchFilters = {
   projectKey?: string;
@@ -49,8 +51,9 @@ export function buildJql(filters: JiraSearchFilters): string {
 export function registerSearchWorkItemsAction(options: {
   actionsRegistry: ActionsRegistryService;
   connections: JiraConnectionsReader;
+  catalog: CatalogService;
 }) {
-  const { actionsRegistry, connections } = options;
+  const { actionsRegistry, connections, catalog } = options;
 
   actionsRegistry.register({
     name: 'search-work-items',
@@ -74,7 +77,15 @@ export function registerSearchWorkItemsAction(options: {
           projectKey: z
             .string()
             .optional()
-            .describe('Filter: the Jira project key, e.g. "PROJ"'),
+            .describe(
+              'Filter: the Jira project key, e.g. "PROJ"; alternative to "entityRef"',
+            ),
+          entityRef: z
+            .string()
+            .optional()
+            .describe(
+              'Filter: a catalog entity ref, e.g. "component:default/my-service", whose "jira/project-key" annotation identifies the project; alternative to "projectKey"',
+            ),
           text: z
             .string()
             .optional()
@@ -108,7 +119,7 @@ export function registerSearchWorkItemsAction(options: {
             .string()
             .optional()
             .describe(
-              'The Jira host to target when multiple Jira connections are configured; defaults to the first configured connection',
+              'The Jira host to target when multiple Jira connections are configured; defaults to the entity\'s "jira/host" annotation or the first configured connection',
             ),
         }),
       output: z =>
@@ -127,7 +138,12 @@ export function registerSearchWorkItemsAction(options: {
             .describe('The matching issues, most recently updated first'),
         }),
     },
-    action: async ({ input }) => {
+    action: async ({ input, credentials }) => {
+      if (input.projectKey !== undefined && input.entityRef !== undefined) {
+        throw new InputError(
+          'Provide either "projectKey" or "entityRef", not both',
+        );
+      }
       const filters: JiraSearchFilters = {
         projectKey: input.projectKey,
         text: input.text,
@@ -136,9 +152,9 @@ export function registerSearchWorkItemsAction(options: {
         assignee: input.assignee,
         labels: input.labels,
       };
-      const hasFilters = Object.values(filters).some(
-        value => value !== undefined,
-      );
+      const hasFilters =
+        input.entityRef !== undefined ||
+        Object.values(filters).some(value => value !== undefined);
       if (input.jql !== undefined && hasFilters) {
         throw new InputError(
           'Provide either "jql" or the simplified filters, not both',
@@ -149,9 +165,22 @@ export function registerSearchWorkItemsAction(options: {
           'Provide either "jql" or at least one simplified filter',
         );
       }
+
+      let annotationHost: string | undefined;
+      if (input.entityRef !== undefined) {
+        const resolved = await resolveEntityProject({
+          catalog,
+          entityRef: input.entityRef,
+          credentials,
+        });
+        filters.projectKey = resolved.projectKey;
+        annotationHost = resolved.host;
+      }
       const jql = input.jql ?? buildJql(filters);
 
-      const connection = connections.find({ host: input.host });
+      const connection = connections.find({
+        host: input.host ?? annotationHost,
+      });
       const client = new JiraClient(connection);
       return {
         output: await client.searchIssues({

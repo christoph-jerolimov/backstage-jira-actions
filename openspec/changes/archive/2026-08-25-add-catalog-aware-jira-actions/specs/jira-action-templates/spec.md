@@ -1,29 +1,4 @@
-# jira-action-templates Specification
-
-## Purpose
-
-Lets every Jira registry action be exercised end-to-end from the Backstage software templates UI: a scaffolder bridge action invokes registry actions, and one test template per action collects the action's inputs as parameters and surfaces its output.
-
-## Requirements
-
-### Requirement: Scaffolder bridge action invokes Jira registry actions
-
-The system SHALL provide a scaffolder action `jira:action:invoke` that invokes an Actions Registry action by its id and passes through the given input. The action SHALL accept `actionId` (required, e.g. `jira-actions:create-work-item`) and `input` (optional object, defaulting to empty). Only actions of the `jira-actions` plugin SHALL be invokable — an `actionId` outside the `jira-actions:` namespace SHALL be rejected as invalid input before any invocation. The registry action's output SHALL be exposed as the scaffolder step output `result`, and registry action failures SHALL fail the template run with the underlying error message.
-
-#### Scenario: Invoke a Jira action from a template step
-
-- **WHEN** a template step runs `jira:action:invoke` with `actionId: jira-actions:get-work-item` and a valid `input`
-- **THEN** that registry action is invoked with the given input and the step's `result` output contains the action's output
-
-#### Scenario: Non-Jira action id is rejected
-
-- **WHEN** a template step runs `jira:action:invoke` with an `actionId` outside the `jira-actions:` namespace (e.g. `catalog:something`)
-- **THEN** the step fails with an input validation error and no action is invoked
-
-#### Scenario: Registry action failure fails the step
-
-- **WHEN** the invoked registry action fails (e.g. unknown issue key)
-- **THEN** the template run fails and the error message includes the underlying action error
+## MODIFIED Requirements
 
 ### Requirement: One test template per Jira action
 

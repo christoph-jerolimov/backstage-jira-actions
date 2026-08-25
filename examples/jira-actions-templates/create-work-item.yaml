@@ -13,14 +13,18 @@ spec:
   parameters:
     - title: Create work item
       required:
-        - projectKey
         - issueType
         - summary
       properties:
         projectKey:
           title: 'Project key'
           type: string
-          description: 'The key of the Jira project, e.g. PROJ'
+          description: 'The key of the Jira project, e.g. PROJ; provide either this or a catalog entity'
+        entityRef:
+          title: 'Catalog entity'
+          type: string
+          description: 'A catalog entity whose jira/project-key annotation identifies the project; alternative to the project key'
+          ui:field: EntityPicker
         issueType:
           title: 'Issue type'
           type: string
@@ -59,6 +63,7 @@ spec:
         actionId: jira-actions:create-work-item
         input:
           projectKey: ${{ parameters.projectKey }}
+          entityRef: ${{ parameters.entityRef }}
           issueType: ${{ parameters.issueType }}
           summary: ${{ parameters.summary }}
           description: '${{ parameters.description }}'

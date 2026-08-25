@@ -10,15 +10,23 @@ const TEMPLATES_DIR = resolve(
 // The required inputs of each registry action, which every test template
 // must ask for as required parameters.
 const REQUIRED_INPUTS: Record<string, string[]> = {
-  'create-work-item': ['projectKey', 'issueType', 'summary'],
+  'create-work-item': ['issueType', 'summary'],
   'update-work-item': ['issueKey'],
   'get-work-item': ['issueKey'],
   'search-work-items': [],
   'add-comment': ['issueKey', 'body'],
   'transition-work-item': ['issueKey', 'status'],
   'list-projects': [],
-  'list-issue-types': ['projectKey'],
+  'list-issue-types': [],
 };
+
+// Actions that accept a catalog entity ref as an alternative to a project
+// key; their templates must offer an entity picker for it.
+const ENTITY_REF_ACTIONS = [
+  'create-work-item',
+  'search-work-items',
+  'list-issue-types',
+];
 
 const ACTION_NAMES = Object.keys(REQUIRED_INPUTS);
 
@@ -70,6 +78,20 @@ describe('jira actions test templates', () => {
       for (const name of properties) {
         expect(stepInput[name]).toBe(`\${{ parameters.${name} }}`);
       }
+    });
+
+    it('offers an entity picker for entityRef on project-scoped actions', () => {
+      const properties = template.spec.parameters.flatMap(
+        (page: { properties?: Record<string, any> }) =>
+          Object.entries(page.properties ?? {}),
+      );
+      const entityRef = properties.find(
+        ([name]: [string, any]) => name === 'entityRef',
+      )?.[1];
+      const expected = ENTITY_REF_ACTIONS.includes(actionName)
+        ? 'EntityPicker'
+        : undefined;
+      expect(entityRef?.['ui:field']).toBe(expected);
     });
 
     it('renders the result and links to the issue where the output has a url', () => {

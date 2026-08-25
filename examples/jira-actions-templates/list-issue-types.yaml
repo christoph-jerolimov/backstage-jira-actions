@@ -12,13 +12,16 @@ spec:
   type: jira-test
   parameters:
     - title: List issue types
-      required:
-        - projectKey
       properties:
         projectKey:
           title: 'Project key'
           type: string
-          description: 'The Jira project key to list issue types for'
+          description: 'The Jira project key to list issue types for; provide either this or a catalog entity'
+        entityRef:
+          title: 'Catalog entity'
+          type: string
+          description: 'A catalog entity whose jira/project-key annotation identifies the project; alternative to the project key'
+          ui:field: EntityPicker
         host:
           title: 'Jira host'
           type: string
@@ -31,6 +34,7 @@ spec:
         actionId: jira-actions:list-issue-types
         input:
           projectKey: ${{ parameters.projectKey }}
+          entityRef: ${{ parameters.entityRef }}
           host: ${{ parameters.host }}
   output:
     text:

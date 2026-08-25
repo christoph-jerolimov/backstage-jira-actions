@@ -3,6 +3,7 @@ import {
   createBackendPlugin,
 } from '@backstage/backend-plugin-api';
 import { actionsRegistryServiceRef } from '@backstage/backend-plugin-api/alpha';
+import { catalogServiceRef } from '@backstage/plugin-catalog-node';
 import { registerAddCommentAction } from './actions/addComment';
 import { registerCreateWorkItemAction } from './actions/createWorkItem';
 import { registerGetWorkItemAction } from './actions/getWorkItem';
@@ -26,17 +27,22 @@ export const jiraActionsPlugin = createBackendPlugin({
       deps: {
         config: coreServices.rootConfig,
         actionsRegistry: actionsRegistryServiceRef,
+        catalog: catalogServiceRef,
       },
-      async init({ config, actionsRegistry }) {
+      async init({ config, actionsRegistry, catalog }) {
         const connections = JiraConnectionsReader.fromConfig(config);
-        registerCreateWorkItemAction({ actionsRegistry, connections });
+        registerCreateWorkItemAction({ actionsRegistry, connections, catalog });
         registerUpdateWorkItemAction({ actionsRegistry, connections });
         registerGetWorkItemAction({ actionsRegistry, connections });
-        registerSearchWorkItemsAction({ actionsRegistry, connections });
+        registerSearchWorkItemsAction({
+          actionsRegistry,
+          connections,
+          catalog,
+        });
         registerAddCommentAction({ actionsRegistry, connections });
         registerTransitionWorkItemAction({ actionsRegistry, connections });
         registerListProjectsAction({ actionsRegistry, connections });
-        registerListIssueTypesAction({ actionsRegistry, connections });
+        registerListIssueTypesAction({ actionsRegistry, connections, catalog });
       },
     });
   },

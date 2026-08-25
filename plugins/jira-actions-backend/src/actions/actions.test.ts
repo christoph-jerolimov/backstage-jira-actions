@@ -3,6 +3,8 @@ import {
   registerMswTestHooks,
 } from '@backstage/backend-test-utils';
 import { actionsRegistryServiceMock } from '@backstage/backend-test-utils/alpha';
+import { Entity } from '@backstage/catalog-model';
+import { catalogServiceMock } from '@backstage/plugin-catalog-node/testUtils';
 import { http, HttpResponse } from 'msw';
 import { setupServer } from 'msw/node';
 import { registerAddCommentAction } from './addComment';
@@ -15,20 +17,44 @@ import { registerTransitionWorkItemAction } from './transitionWorkItem';
 import { registerUpdateWorkItemAction } from './updateWorkItem';
 import { JiraConnectionsReader } from '../lib/connections';
 
-function makeRegistry(connections: unknown) {
+function makeRegistry(connections: unknown, entities: Entity[] = []) {
   const actionsRegistry = actionsRegistryServiceMock();
   const reader = JiraConnectionsReader.fromConfig(
     mockServices.rootConfig({ data: { connections } as any }),
   );
-  registerCreateWorkItemAction({ actionsRegistry, connections: reader });
+  const catalog = catalogServiceMock({ entities });
+  registerCreateWorkItemAction({
+    actionsRegistry,
+    connections: reader,
+    catalog,
+  });
   registerUpdateWorkItemAction({ actionsRegistry, connections: reader });
   registerGetWorkItemAction({ actionsRegistry, connections: reader });
-  registerSearchWorkItemsAction({ actionsRegistry, connections: reader });
+  registerSearchWorkItemsAction({
+    actionsRegistry,
+    connections: reader,
+    catalog,
+  });
   registerAddCommentAction({ actionsRegistry, connections: reader });
   registerTransitionWorkItemAction({ actionsRegistry, connections: reader });
   registerListProjectsAction({ actionsRegistry, connections: reader });
-  registerListIssueTypesAction({ actionsRegistry, connections: reader });
+  registerListIssueTypesAction({
+    actionsRegistry,
+    connections: reader,
+    catalog,
+  });
   return actionsRegistry;
+}
+
+function componentEntity(
+  name: string,
+  annotations: Record<string, string>,
+): Entity {
+  return {
+    apiVersion: 'backstage.io/v1alpha1',
+    kind: 'Component',
+    metadata: { name, namespace: 'default', annotations },
+  };
 }
 
 const cloudConnection = {
@@ -651,6 +677,240 @@ describe('jira work item actions', () => {
           input: { projectKey: 'NOPE' },
         }),
       ).rejects.toThrow(/NOPE.*status 404/);
+    });
+  });
+
+  describe('catalog entity resolution', () => {
+    const annotatedEntity = componentEntity('my-service', {
+      'jira/project-key': 'PROJ',
+    });
+
+    it('creates a work item for a catalog entity', async () => {
+      let received: any;
+      server.use(
+        http.post(
+          'https://example.atlassian.net/rest/api/3/issue',
+          async ({ request }) => {
+            received = await request.json();
+            return HttpResponse.json(
+              { id: '10001', key: 'PROJ-123' },
+              { status: 201 },
+            );
+          },
+        ),
+      );
+
+      const result = await makeRegistry(
+        [cloudConnection],
+        [annotatedEntity],
+      ).invoke({
+        id: 'test:create-work-item',
+        input: {
+          entityRef: 'component:default/my-service',
+          issueType: 'Bug',
+          summary: 'x',
+        },
+      });
+
+      expect(received.fields.project).toEqual({ key: 'PROJ' });
+      expect(result).toEqual({
+        output: {
+          id: '10001',
+          key: 'PROJ-123',
+          url: 'https://example.atlassian.net/browse/PROJ-123',
+        },
+      });
+    });
+
+    it('rejects both projectKey and entityRef before any call', async () => {
+      await expect(
+        makeRegistry([cloudConnection], [annotatedEntity]).invoke({
+          id: 'test:create-work-item',
+          input: {
+            projectKey: 'PROJ',
+            entityRef: 'component:default/my-service',
+            issueType: 'Bug',
+            summary: 'x',
+          },
+        }),
+      ).rejects.toThrow(/exactly one of "projectKey" and "entityRef"/);
+    });
+
+    it('rejects neither projectKey nor entityRef', async () => {
+      await expect(
+        makeRegistry([cloudConnection]).invoke({
+          id: 'test:create-work-item',
+          input: { issueType: 'Bug', summary: 'x' },
+        }),
+      ).rejects.toThrow(/exactly one of "projectKey" and "entityRef"/);
+    });
+
+    it('fails with NotFound for an unknown entity', async () => {
+      await expect(
+        makeRegistry([cloudConnection]).invoke({
+          id: 'test:create-work-item',
+          input: {
+            entityRef: 'component:default/nope',
+            issueType: 'Bug',
+            summary: 'x',
+          },
+        }),
+      ).rejects.toThrow(
+        /Entity "component:default\/nope" was not found in the catalog/,
+      );
+    });
+
+    it('fails when the entity lacks the project-key annotation', async () => {
+      await expect(
+        makeRegistry([cloudConnection], [componentEntity('bare', {})]).invoke({
+          id: 'test:create-work-item',
+          input: {
+            entityRef: 'component:default/bare',
+            issueType: 'Bug',
+            summary: 'x',
+          },
+        }),
+      ).rejects.toThrow(/has no "jira\/project-key" annotation/);
+    });
+
+    it('selects the connection from the jira/host annotation', async () => {
+      let received: any;
+      server.use(
+        http.post(
+          'https://jira.example.com/rest/api/2/issue',
+          async ({ request }) => {
+            received = await request.json();
+            return HttpResponse.json(
+              { id: '20001', key: 'OPS-1' },
+              { status: 201 },
+            );
+          },
+        ),
+      );
+
+      await makeRegistry(
+        [cloudConnection, datacenterConnection],
+        [
+          componentEntity('ops-service', {
+            'jira/project-key': 'OPS',
+            'jira/host': 'jira.example.com',
+          }),
+        ],
+      ).invoke({
+        id: 'test:create-work-item',
+        input: {
+          entityRef: 'component:default/ops-service',
+          issueType: 'Task',
+          summary: 'x',
+        },
+      });
+
+      expect(received.fields.project).toEqual({ key: 'OPS' });
+    });
+
+    it('prefers an explicit host input over the annotation', async () => {
+      let received: any;
+      server.use(
+        http.post(
+          'https://example.atlassian.net/rest/api/3/issue',
+          async ({ request }) => {
+            received = await request.json();
+            return HttpResponse.json(
+              { id: '10002', key: 'OPS-2' },
+              { status: 201 },
+            );
+          },
+        ),
+      );
+
+      await makeRegistry(
+        [cloudConnection, datacenterConnection],
+        [
+          componentEntity('ops-service', {
+            'jira/project-key': 'OPS',
+            'jira/host': 'jira.example.com',
+          }),
+        ],
+      ).invoke({
+        id: 'test:create-work-item',
+        input: {
+          entityRef: 'component:default/ops-service',
+          issueType: 'Task',
+          summary: 'x',
+          host: 'example.atlassian.net',
+        },
+      });
+
+      expect(received.fields.project).toEqual({ key: 'OPS' });
+    });
+
+    it('restricts a search to the entity project', async () => {
+      let received: any;
+      server.use(
+        http.post(
+          'https://example.atlassian.net/rest/api/3/search/jql',
+          async ({ request }) => {
+            received = await request.json();
+            return HttpResponse.json({ issues: [] });
+          },
+        ),
+      );
+
+      await makeRegistry([cloudConnection], [annotatedEntity]).invoke({
+        id: 'test:search-work-items',
+        input: {
+          entityRef: 'component:default/my-service',
+          status: 'In Progress',
+        },
+      });
+
+      expect(received.jql).toBe(
+        'project = "PROJ" AND status = "In Progress" ORDER BY updated DESC',
+      );
+    });
+
+    it('rejects a search with both projectKey and entityRef', async () => {
+      await expect(
+        makeRegistry([cloudConnection], [annotatedEntity]).invoke({
+          id: 'test:search-work-items',
+          input: {
+            projectKey: 'PROJ',
+            entityRef: 'component:default/my-service',
+          },
+        }),
+      ).rejects.toThrow(/either "projectKey" or "entityRef", not both/);
+    });
+
+    it('lists issue types via entity ref', async () => {
+      server.use(
+        http.get('https://example.atlassian.net/rest/api/3/project/PROJ', () =>
+          HttpResponse.json({
+            key: 'PROJ',
+            issueTypes: [{ id: 1, name: 'Bug', subtask: false }],
+          }),
+        ),
+      );
+
+      const result = await makeRegistry(
+        [cloudConnection],
+        [annotatedEntity],
+      ).invoke({
+        id: 'test:list-issue-types',
+        input: { entityRef: 'component:default/my-service' },
+      });
+
+      expect(result).toEqual({
+        output: { issueTypes: [{ id: '1', name: 'Bug', subtask: false }] },
+      });
+    });
+
+    it('rejects list-issue-types without projectKey or entityRef', async () => {
+      await expect(
+        makeRegistry([cloudConnection]).invoke({
+          id: 'test:list-issue-types',
+          input: {},
+        }),
+      ).rejects.toThrow(/exactly one of "projectKey" and "entityRef"/);
     });
   });
 
