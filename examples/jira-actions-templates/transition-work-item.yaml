@@ -44,5 +44,5 @@ spec:
       - title: Result
         content: |
           ```json
-          ${{ steps.invoke.output | dump }}
+          ${{ steps.invoke.output | dump(2) }}
           ```
