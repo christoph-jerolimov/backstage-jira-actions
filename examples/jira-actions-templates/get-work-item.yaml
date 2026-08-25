@@ -26,19 +26,17 @@ spec:
   steps:
     - id: invoke
       name: 'Get work item'
-      action: jira:action:invoke
+      action: jira-actions:get-work-item
       input:
-        actionId: jira-actions:get-work-item
-        input:
-          issueKey: ${{ parameters.issueKey }}
-          host: ${{ parameters.host }}
+        issueKey: ${{ parameters.issueKey }}
+        host: ${{ parameters.host }}
   output:
     links:
       - title: Open issue
-        url: ${{ steps.invoke.output.result.url }}
+        url: ${{ steps.invoke.output.url }}
     text:
       - title: Result
         content: |
           ```json
-          ${{ steps.invoke.output.result | dump }}
+          ${{ steps.invoke.output | dump }}
           ```

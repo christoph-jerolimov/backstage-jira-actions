@@ -24,16 +24,14 @@ spec:
   steps:
     - id: invoke
       name: 'List projects'
-      action: jira:action:invoke
+      action: jira-actions:list-projects
       input:
-        actionId: jira-actions:list-projects
-        input:
-          maxResults: ${{ parameters.maxResults }}
-          host: ${{ parameters.host }}
+        maxResults: ${{ parameters.maxResults }}
+        host: ${{ parameters.host }}
   output:
     text:
       - title: Result
         content: |
           ```json
-          ${{ steps.invoke.output.result | dump }}
+          ${{ steps.invoke.output | dump }}
           ```

@@ -2,7 +2,7 @@
 
 ## Purpose
 
-Lets every Jira registry action be exercised end-to-end from the Backstage software templates UI: a scaffolder bridge action invokes registry actions, and one test template per action collects the action's inputs as parameters and surfaces its output.
+Lets every Jira registry action be exercised end-to-end from the Backstage software templates UI: one test template per action collects the action's inputs as parameters, invokes the registry action directly as its template step, and surfaces its output.
 
 ## Requirements
 

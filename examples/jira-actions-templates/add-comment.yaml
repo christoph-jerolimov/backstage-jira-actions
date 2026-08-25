@@ -31,20 +31,18 @@ spec:
   steps:
     - id: invoke
       name: 'Add comment'
-      action: jira:action:invoke
+      action: jira-actions:add-comment
       input:
-        actionId: jira-actions:add-comment
-        input:
-          issueKey: ${{ parameters.issueKey }}
-          body: ${{ parameters.body }}
-          host: ${{ parameters.host }}
+        issueKey: ${{ parameters.issueKey }}
+        body: ${{ parameters.body }}
+        host: ${{ parameters.host }}
   output:
     links:
       - title: Open issue
-        url: ${{ steps.invoke.output.result.url }}
+        url: ${{ steps.invoke.output.url }}
     text:
       - title: Result
         content: |
           ```json
-          ${{ steps.invoke.output.result | dump }}
+          ${{ steps.invoke.output | dump }}
           ```

@@ -38,7 +38,8 @@
     "@backstage/backend-test-utils": "^1.11.6",
     "@backstage/catalog-model": "^1.7.5",
     "@backstage/cli": "^0.36.5",
-    "msw": "^2.7.0"
+    "msw": "^2.7.0",
+    "yaml": "^2.6.0"
   },
   "configSchema": "config.d.ts",
   "files": [

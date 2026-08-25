@@ -31,20 +31,18 @@ spec:
   steps:
     - id: invoke
       name: 'Transition work item'
-      action: jira:action:invoke
+      action: jira-actions:transition-work-item
       input:
-        actionId: jira-actions:transition-work-item
-        input:
-          issueKey: ${{ parameters.issueKey }}
-          status: ${{ parameters.status }}
-          host: ${{ parameters.host }}
+        issueKey: ${{ parameters.issueKey }}
+        status: ${{ parameters.status }}
+        host: ${{ parameters.host }}
   output:
     links:
       - title: Open issue
-        url: ${{ steps.invoke.output.result.url }}
+        url: ${{ steps.invoke.output.url }}
     text:
       - title: Result
         content: |
           ```json
-          ${{ steps.invoke.output.result | dump }}
+          ${{ steps.invoke.output | dump }}
           ```
