@@ -2,7 +2,7 @@
 
 ## 1. Plugin scaffolding
 
-- [x] 1.1 Scaffold the backend plugin with `yarn new` (backend-plugin, ID `jira-actions`, then set plugin ID to `jira` in `createBackendPlugin`) at `plugins/jira-actions-backend`; verify `yarn install` succeeds and the package appears in the workspace (`yarn workspaces info` or `yarn workspace backstage-plugin-jira-actions-backend lint` runs).
+- [x] 1.1 Scaffold the backend plugin with `yarn new` (backend-plugin, ID `jira-actions`, plugin ID `jira-actions` in `createBackendPlugin`) at `plugins/jira-actions-backend`; verify `yarn install` succeeds and the package appears in the workspace (`yarn workspaces info` or `yarn workspace backstage-plugin-jira-actions-backend lint` runs).
 - [x] 1.2 Trim the scaffold to this plugin's needs (remove generated router/todo example code, keep `plugin.ts`/`index.ts`), add `zod` dependency; verify `yarn tsc` passes.
 
 ## 2. Jira connections (spec: jira-connections)
@@ -24,6 +24,6 @@
 
 ## 5. Backend wiring & docs
 
-- [x] 5.1 Add the plugin to `packages/backend/package.json` and `packages/backend/src/index.ts`, and add `jira` to `backend.actions.pluginSources` plus a commented example `connections` entry in `app-config.yaml`; verify `yarn tsc` and `yarn build:backend` succeed.
+- [x] 5.1 Add the plugin to `packages/backend/package.json` and `packages/backend/src/index.ts`, and add `jira-actions` to `backend.actions.pluginSources` plus a commented example `connections` entry in `app-config.yaml`; verify `yarn tsc` and `yarn build:backend` succeed.
 - [x] 5.2 Write the plugin `README.md` (configuration example for cloud and datacenter, action reference, MCP exposure note, forward-compat note on the connections framework from design.md); verify the README's config example round-trips through `config:check`.
 - [x] 5.3 Run the repo verification suite — `yarn tsc`, `yarn lint:all`, `yarn prettier:check`, `yarn test` for the new plugin — and verify all pass; optionally smoke-test `yarn start` boots with a dummy jira connection configured.

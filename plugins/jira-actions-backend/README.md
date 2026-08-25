@@ -1,16 +1,16 @@
 # backstage-plugin-jira-actions-backend
 
-A Backstage backend plugin (plugin ID `jira`) that registers Jira work item
+A Backstage backend plugin (plugin ID `jira-actions`) that registers Jira work item
 actions in the Backstage [Actions Registry](https://backstage.io/docs/backend-system/core-services/actions-registry/),
 so that they can be invoked through the actions service and — via
 `@backstage/plugin-mcp-actions-backend` — exposed as MCP tools to AI agents.
 
 ## Actions
 
-| Action ID               | Description                                                                                     |
-| ----------------------- | ----------------------------------------------------------------------------------------------- |
-| `jira:create-work-item` | Creates a work item (issue) such as a Story, Bug or Task in a Jira project.                     |
-| `jira:update-work-item` | Modifies fields (summary, description, labels, assignee, issue type) of an existing Jira issue. |
+| Action ID                       | Description                                                                                     |
+| ------------------------------- | ----------------------------------------------------------------------------------------------- |
+| `jira-actions:create-work-item` | Creates a work item (issue) such as a Story, Bug or Task in a Jira project.                     |
+| `jira-actions:update-work-item` | Modifies fields (summary, description, labels, assignee, issue type) of an existing Jira issue. |
 
 Both actions accept an optional `host` input to select a specific Jira
 connection when more than one is configured; without it, the first configured
@@ -55,7 +55,7 @@ To expose the actions over MCP, add the plugin ID to the actions sources:
 backend:
   actions:
     pluginSources:
-      - jira
+      - jira-actions
 ```
 
 ## Installation

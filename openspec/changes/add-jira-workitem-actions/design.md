@@ -16,7 +16,7 @@ See proposal.md for motivation. Facts that shape the design:
 
 **Goals:**
 
-- One small backend plugin, `plugins/jira-actions-backend`, plugin ID `jira`, following standard `backstage-cli new` layout.
+- One small backend plugin, `plugins/jira-actions-backend`, plugin ID `jira-actions`, following standard `backstage-cli new` layout.
 - Connection resolution that reads the `connections` config section today and can be swapped for the framework `ConnectionsService` with minimal churn once Jira is a supported type.
 - Action input/output schemas that are self-describing for AI agents (MCP is the primary expected consumer).
 - Unit-testable Jira client with no real network in tests.
@@ -32,7 +32,7 @@ See proposal.md for motivation. Facts that shape the design:
 
 ### D1: Package layout — single backend plugin created with `backstage-cli new`
 
-`plugins/jira-actions-backend`, package name `backstage-plugin-jira-actions-backend` (repo uses `UNLICENSED` private packages), plugin ID `jira`. A `node` library split (`jira-actions-node`) is not warranted for this size; the connection service and client live inside the plugin's `src/lib/`.
+`plugins/jira-actions-backend`, package name `backstage-plugin-jira-actions-backend` (repo uses `UNLICENSED` private packages), plugin ID `jira-actions`. A `node` library split (`jira-actions-node`) is not warranted for this size; the connection service and client live inside the plugin's `src/lib/`.
 
 _Alternative considered_: separate `jira-actions-common`/`-node` packages — rejected as premature for two actions.
 
@@ -57,7 +57,7 @@ The plugin depends on `actionsRegistryServiceRef` from `@backstage/backend-plugi
 - `create-work-item` — zod input per spec (`projectKey`, `issueType`, `summary`, `description?`, `labels?`, `assignee?`, `parentKey?`, `host?`); output `{key, id, url}`. Attributes: `{ destructive: false, idempotent: false, readOnly: false }`.
 - `update-work-item` — input `issueKey` + optional updatable fields + `host?`, with a zod `refine` requiring at least one updatable field; output `{key, url}`. Attributes: `{ destructive: false, idempotent: true, readOnly: false }`.
 
-Action names are registered unprefixed; the registry namespaces them with the plugin ID (final IDs like `jira:create-work-item`). `app-config.yaml` adds `jira` to `backend.actions.pluginSources` so the actions surface through the actions service and MCP.
+Action names are registered unprefixed; the registry namespaces them with the plugin ID (final IDs like `jira-actions:create-work-item`). `app-config.yaml` adds `jira-actions` to `backend.actions.pluginSources` so the actions surface through the actions service and MCP.
 
 _Alternative considered_: scaffolder actions — rejected: scaffolder actions only run inside templates; the actions registry is what MCP consumes and what the user asked for.
 
@@ -87,7 +87,7 @@ _Alternative considered_: `jira.js` npm SDK — rejected: large dependency for t
 - [Actions Registry is alpha; API may break on upgrade] → Pinned via the repo's existing `@backstage/backend-plugin-api` range; the two registration call sites are trivial to adapt.
 - [Description ADF conversion is lossy (plain text only)] → Acceptable for agent-driven ticket creation; document that rich formatting is out of scope.
 - [Cloud vs Data Center assignee semantics differ (accountId vs username)] → Exposed as one `assignee` input; the client maps per `product`, and the input description tells callers which identifier to pass.
-- [Registry namespacing means final action IDs depend on plugin ID `jira`] → Keep plugin ID `jira` stable; renaming it would rename the MCP tools.
+- [Registry namespacing means final action IDs depend on plugin ID `jira-actions`] → Keep plugin ID `jira-actions` stable; renaming it would rename the MCP tools.
 
 ## Migration Plan
 

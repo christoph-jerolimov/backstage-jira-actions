@@ -12,7 +12,7 @@
   },
   "backstage": {
     "role": "backend-plugin",
-    "pluginId": "jira",
+    "pluginId": "jira-actions",
     "pluginPackages": [
       "backstage-plugin-jira-actions-backend"
     ]

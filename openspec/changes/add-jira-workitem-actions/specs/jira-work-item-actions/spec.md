@@ -6,11 +6,11 @@ Provides Backstage Actions Registry actions to create and modify Jira work items
 
 ### Requirement: Jira actions are registered in the Actions Registry
 
-The system SHALL register the Jira work item actions in the Backstage Actions Registry under the `jira` plugin, so that they are discoverable and invokable through the actions service, and exposed via the MCP actions backend when the `jira` plugin is listed in `backend.actions.pluginSources`. Each action SHALL declare a title, a description, and typed input and output schemas so that callers (including AI agents) can discover how to use it without external documentation.
+The system SHALL register the Jira work item actions in the Backstage Actions Registry under the `jira-actions` plugin, so that they are discoverable and invokable through the actions service, and exposed via the MCP actions backend when the `jira-actions` plugin is listed in `backend.actions.pluginSources`. Each action SHALL declare a title, a description, and typed input and output schemas so that callers (including AI agents) can discover how to use it without external documentation.
 
 #### Scenario: Actions are discoverable
 
-- **WHEN** the backend starts with the Jira actions plugin installed and `jira` listed in `backend.actions.pluginSources`
+- **WHEN** the backend starts with the Jira actions plugin installed and `jira-actions` listed in `backend.actions.pluginSources`
 - **THEN** the actions `create-work-item` and `update-work-item` are listed by the actions service with their input and output schemas
 
 ### Requirement: Create work item action

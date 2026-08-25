@@ -14,7 +14,7 @@ import { JiraConnectionsReader } from './lib/connections';
  * @public
  */
 export const jiraActionsPlugin = createBackendPlugin({
-  pluginId: 'jira',
+  pluginId: 'jira-actions',
   register(env) {
     env.registerInit({
       deps: {
