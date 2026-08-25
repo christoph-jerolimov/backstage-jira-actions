@@ -1,0 +1,44 @@
+apiVersion: scaffolder.backstage.io/v1beta3
+kind: Template
+metadata:
+  name: 'jira-test-get-work-item'
+  title: 'Jira Test: Get Work Item'
+  description: 'Reads a single Jira work item by its key via the jira-actions:get-work-item action.'
+  tags:
+    - jira
+    - test
+spec:
+  owner: user:guest
+  type: jira-test
+  parameters:
+    - title: Get work item
+      required:
+        - issueKey
+      properties:
+        issueKey:
+          title: 'Issue key'
+          type: string
+          description: 'The key of the issue to read, e.g. PROJ-123'
+        host:
+          title: 'Jira host'
+          type: string
+          description: 'Only needed when multiple Jira connections are configured'
+  steps:
+    - id: invoke
+      name: 'Get work item'
+      action: jira:action:invoke
+      input:
+        actionId: jira-actions:get-work-item
+        input:
+          issueKey: ${{ parameters.issueKey }}
+          host: ${{ parameters.host }}
+  output:
+    links:
+      - title: Open issue
+        url: ${{ steps.invoke.output.result.url }}
+    text:
+      - title: Result
+        content: |
+          ```json
+          ${{ steps.invoke.output.result | dump }}
+          ```

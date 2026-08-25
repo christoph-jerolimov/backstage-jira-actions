@@ -1,0 +1,71 @@
+apiVersion: scaffolder.backstage.io/v1beta3
+kind: Template
+metadata:
+  name: 'jira-test-update-work-item'
+  title: 'Jira Test: Update Work Item'
+  description: 'Modifies fields of an existing Jira work item via the jira-actions:update-work-item action.'
+  tags:
+    - jira
+    - test
+spec:
+  owner: user:guest
+  type: jira-test
+  parameters:
+    - title: Update work item
+      required:
+        - issueKey
+      properties:
+        issueKey:
+          title: 'Issue key'
+          type: string
+          description: 'The key of the issue to update, e.g. PROJ-123'
+        summary:
+          title: 'New summary'
+          type: string
+          description: 'The new summary (title) of the issue'
+        description:
+          title: 'New description'
+          type: string
+          description: 'The new plain-text description of the issue'
+        labels:
+          title: 'Labels'
+          type: array
+          description: 'The full new list of labels, replacing existing labels'
+          items:
+            type: string
+        assignee:
+          title: 'New assignee'
+          type: string
+          description: 'A Jira account ID (Cloud) or username (Data Center)'
+        issueType:
+          title: 'New issue type'
+          type: string
+          description: 'The new issue type name, e.g. Story, Bug or Task'
+        host:
+          title: 'Jira host'
+          type: string
+          description: 'Only needed when multiple Jira connections are configured'
+  steps:
+    - id: invoke
+      name: 'Update work item'
+      action: jira:action:invoke
+      input:
+        actionId: jira-actions:update-work-item
+        input:
+          issueKey: ${{ parameters.issueKey }}
+          summary: ${{ parameters.summary }}
+          description: '${{ parameters.description }}'
+          labels: ${{ parameters.labels }}
+          assignee: ${{ parameters.assignee }}
+          issueType: ${{ parameters.issueType }}
+          host: ${{ parameters.host }}
+  output:
+    links:
+      - title: Open issue
+        url: ${{ steps.invoke.output.result.url }}
+    text:
+      - title: Result
+        content: |
+          ```json
+          ${{ steps.invoke.output.result | dump }}
+          ```

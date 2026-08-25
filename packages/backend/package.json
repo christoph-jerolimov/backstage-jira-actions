@@ -47,6 +47,7 @@
     "@backstage/plugin-user-settings-backend": "^0.4.6",
     "app": "link:../app",
     "backstage-plugin-jira-actions-backend": "workspace:^",
+    "backstage-plugin-scaffolder-backend-module-jira-actions": "workspace:^",
     "better-sqlite3": "^12.0.0",
     "node-gyp": "^10.0.0",
     "pg": "^8.11.3"

@@ -71,5 +71,6 @@ backend.add(import('@backstage/plugin-mcp-actions-backend'));
 
 // jira actions plugin
 backend.add(import('backstage-plugin-jira-actions-backend'));
+backend.add(import('backstage-plugin-scaffolder-backend-module-jira-actions'));
 
 backend.start();

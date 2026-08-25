@@ -1,0 +1,50 @@
+apiVersion: scaffolder.backstage.io/v1beta3
+kind: Template
+metadata:
+  name: 'jira-test-add-comment'
+  title: 'Jira Test: Add Comment'
+  description: 'Adds a plain-text comment to a Jira work item via the jira-actions:add-comment action.'
+  tags:
+    - jira
+    - test
+spec:
+  owner: user:guest
+  type: jira-test
+  parameters:
+    - title: Add comment
+      required:
+        - issueKey
+        - body
+      properties:
+        issueKey:
+          title: 'Issue key'
+          type: string
+          description: 'The key of the issue to comment on, e.g. PROJ-123'
+        body:
+          title: 'Comment'
+          type: string
+          description: 'The plain-text comment body'
+        host:
+          title: 'Jira host'
+          type: string
+          description: 'Only needed when multiple Jira connections are configured'
+  steps:
+    - id: invoke
+      name: 'Add comment'
+      action: jira:action:invoke
+      input:
+        actionId: jira-actions:add-comment
+        input:
+          issueKey: ${{ parameters.issueKey }}
+          body: ${{ parameters.body }}
+          host: ${{ parameters.host }}
+  output:
+    links:
+      - title: Open issue
+        url: ${{ steps.invoke.output.result.url }}
+    text:
+      - title: Result
+        content: |
+          ```json
+          ${{ steps.invoke.output.result | dump }}
+          ```

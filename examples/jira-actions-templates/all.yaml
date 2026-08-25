@@ -1,0 +1,15 @@
+apiVersion: backstage.io/v1alpha1
+kind: Location
+metadata:
+  name: 'jira-actions-templates'
+  description: 'Test templates for the jira-actions plugin actions, one per action'
+spec:
+  targets:
+    - ./create-work-item.yaml
+    - ./update-work-item.yaml
+    - ./get-work-item.yaml
+    - ./search-work-items.yaml
+    - ./add-comment.yaml
+    - ./transition-work-item.yaml
+    - ./list-projects.yaml
+    - ./list-issue-types.yaml

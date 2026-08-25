@@ -1,0 +1,39 @@
+apiVersion: scaffolder.backstage.io/v1beta3
+kind: Template
+metadata:
+  name: 'jira-test-list-projects'
+  title: 'Jira Test: List Projects'
+  description: 'Lists the visible Jira projects via the jira-actions:list-projects action.'
+  tags:
+    - jira
+    - test
+spec:
+  owner: user:guest
+  type: jira-test
+  parameters:
+    - title: List projects
+      properties:
+        maxResults:
+          title: 'Maximum results'
+          type: number
+          description: 'Maximum number of projects to return, default 50'
+        host:
+          title: 'Jira host'
+          type: string
+          description: 'Only needed when multiple Jira connections are configured'
+  steps:
+    - id: invoke
+      name: 'List projects'
+      action: jira:action:invoke
+      input:
+        actionId: jira-actions:list-projects
+        input:
+          maxResults: ${{ parameters.maxResults }}
+          host: ${{ parameters.host }}
+  output:
+    text:
+      - title: Result
+        content: |
+          ```json
+          ${{ steps.invoke.output.result | dump }}
+          ```

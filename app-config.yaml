@@ -207,6 +207,12 @@ catalog:
       rules:
         - allow: [User, Group]
 
+    # Test templates for the jira-actions plugin, one per action
+    - type: file
+      target: ../../examples/jira-actions-templates/all.yaml
+      rules:
+        - allow: [Location, Template]
+
     ## Uncomment these lines to add more example data
     # - type: url
     #   target: https://github.com/backstage/backstage/blob/master/packages/catalog-model/examples/all.yaml
