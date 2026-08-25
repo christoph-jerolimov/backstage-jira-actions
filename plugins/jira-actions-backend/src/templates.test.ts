@@ -36,6 +36,14 @@ const FORMAT_PARAMS: Record<string, string> = {
   'get-work-item': 'descriptionFormat',
 };
 
+// List-returning read actions whose templates render a markdown list block
+// (over this output collection field) before the JSON dump.
+const LIST_OUTPUTS: Record<string, string> = {
+  'list-projects': 'projects',
+  'list-issue-types': 'issueTypes',
+  'search-work-items': 'items',
+};
+
 const ACTION_NAMES = Object.keys(REQUIRED_INPUTS);
 
 describe('jira actions test templates', () => {
@@ -112,6 +120,20 @@ describe('jira actions test templates', () => {
       )?.[1];
       const expected = param ? ['markdown', 'adf', 'text'] : undefined;
       expect(formatProperty?.enum).toEqual(expected);
+    });
+
+    it('renders list results as a markdown list plus a JSON dump', () => {
+      const collection = LIST_OUTPUTS[actionName];
+      const texts = template.spec.output?.text ?? [];
+      expect(texts).toHaveLength(collection ? 2 : 1);
+      const first = texts[0]?.content ?? '';
+      const last = texts[texts.length - 1]?.content ?? '';
+      expect(first.includes('{% for')).toBe(Boolean(collection));
+      expect(
+        !collection || first.includes(`steps.invoke.output.${collection}`),
+      ).toBe(true);
+      expect(!collection || !first.includes('dump')).toBe(true);
+      expect(last).toContain('| dump(2)');
     });
 
     it('renders the result and links to the issue where the output has a url', () => {

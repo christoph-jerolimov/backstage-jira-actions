@@ -30,7 +30,11 @@ spec:
         host: ${{ parameters.host }}
   output:
     text:
-      - title: Result
+      - title: 'Projects'
+        content: |
+          {% for p in steps.invoke.output.projects %}- **${{ p.key }}** — ${{ p.name }} (id ${{ p.id }})
+          {% endfor %}
+      - title: 'JSON'
         content: |
           ```json
           ${{ steps.invoke.output | dump(2) }}
