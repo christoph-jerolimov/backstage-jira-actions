@@ -30,7 +30,7 @@ See proposal.md for motivation. Everything builds on established seams: `JiraCli
 
 ### D2: update-work-item label semantics
 
-`addLabels`/`removeLabels` join the updatable-field set. Validation order: at-least-one-updatable check (now including the two new inputs), then the `labels` XOR (`addLabels`|`removeLabels`) conflict check — both before any Jira call. When incremental inputs are present the handler issues the `update.labels` request via `editLabels` combined into the same `PUT` as the other field changes? No — one `PUT` can carry both `fields` and `update`, so `updateIssue` gains an optional `labelEdits` parameter that adds the `update` section to the single request, keeping the action one round-trip. The dedicated label actions still use `editLabels` (single label, plus read-back).
+`addLabels`/`removeLabels` join the updatable-field set. Validation order: at-least-one-updatable check (now including the two new inputs), then the `labels` XOR (`addLabels`|`removeLabels`) conflict check — both before any Jira call. Since one `PUT` can carry both `fields` and `update` sections, `updateIssue` gains an optional `labelEdits` parameter that adds the `update.labels` section to the same request, keeping the action a single round-trip even when incremental label edits accompany other field changes. The dedicated label actions use `editLabels` instead (single label, plus read-back).
 
 ### D3: New action shapes
 
