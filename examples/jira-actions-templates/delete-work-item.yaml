@@ -1,0 +1,44 @@
+apiVersion: scaffolder.backstage.io/v1beta3
+kind: Template
+metadata:
+  name: 'jira-test-delete-work-item'
+  title: 'Jira Test: Delete Work Item'
+  description: 'Permanently deletes a Jira work item via the jira-actions:delete-work-item action. This cannot be undone.'
+  tags:
+    - jira
+    - test
+spec:
+  owner: user:guest
+  type: jira-test
+  parameters:
+    - title: Delete work item
+      required:
+        - issueKey
+      properties:
+        issueKey:
+          title: 'Issue key'
+          type: string
+          description: 'The key of the issue to permanently delete, e.g. PROJ-123'
+        deleteSubtasks:
+          title: 'Delete sub-tasks'
+          type: boolean
+          description: "Also delete the issue's sub-tasks; without it, deleting an issue that has sub-tasks fails"
+        host:
+          title: 'Jira host'
+          type: string
+          description: 'Only needed when multiple Jira connections are configured'
+  steps:
+    - id: invoke
+      name: 'Delete work item'
+      action: jira-actions:delete-work-item
+      input:
+        issueKey: ${{ parameters.issueKey }}
+        deleteSubtasks: ${{ parameters.deleteSubtasks }}
+        host: ${{ parameters.host }}
+  output:
+    text:
+      - title: Result
+        content: |
+          ```json
+          ${{ steps.invoke.output | dump(2) }}
+          ```

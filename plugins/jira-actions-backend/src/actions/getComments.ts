@@ -1,12 +1,15 @@
+import { PermissionsService } from '@backstage/backend-plugin-api';
 import { ActionsRegistryService } from '@backstage/backend-plugin-api/alpha';
 import { JiraClient } from '../lib/JiraClient';
 import { JiraConnectionsReader } from '../lib/connections';
+import { assertPermission, jiraWorkItemReadPermission } from '../permissions';
 
 export function registerGetCommentsAction(options: {
   actionsRegistry: ActionsRegistryService;
   connections: JiraConnectionsReader;
+  permissions: PermissionsService;
 }) {
-  const { actionsRegistry, connections } = options;
+  const { actionsRegistry, connections, permissions } = options;
 
   actionsRegistry.register({
     name: 'get-comments',
@@ -37,6 +40,12 @@ export function registerGetCommentsAction(options: {
             .max(100)
             .optional()
             .describe('Maximum number of comments to return, default 50'),
+          pageToken: z
+            .string()
+            .optional()
+            .describe(
+              'An opaque cursor from a previous invocation to fetch the next page of comments',
+            ),
           host: z
             .string()
             .optional()
@@ -71,14 +80,29 @@ export function registerGetCommentsAction(options: {
               }),
             )
             .describe('The comments of the issue, oldest first'),
+          nextPageToken: z
+            .string()
+            .optional()
+            .describe(
+              'Cursor for the next page of comments; absent when no further comments remain',
+            ),
         }),
     },
-    action: async ({ input }) => {
+    action: async ({ input, credentials }) => {
+      await assertPermission(
+        permissions,
+        jiraWorkItemReadPermission,
+        credentials,
+      );
       const connection = connections.find({ host: input.host });
       const client = new JiraClient(connection);
-      const comments = await client.getComments(input.issueKey, {
-        maxResults: input.maxResults ?? 50,
-      });
+      const { comments, nextPageToken } = await client.getComments(
+        input.issueKey,
+        {
+          maxResults: input.maxResults ?? 50,
+          pageToken: input.pageToken,
+        },
+      );
       return {
         output: {
           key: input.issueKey,
@@ -90,6 +114,7 @@ export function registerGetCommentsAction(options: {
               input.bodyFormat ?? 'markdown',
             ),
           })),
+          nextPageToken,
         },
       };
     },

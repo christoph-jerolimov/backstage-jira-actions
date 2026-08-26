@@ -1,9 +1,11 @@
+import { PermissionsService } from '@backstage/backend-plugin-api';
 import { ActionsRegistryService } from '@backstage/backend-plugin-api/alpha';
 import { InputError } from '@backstage/errors';
 import { CatalogService } from '@backstage/plugin-catalog-node';
 import { JiraClient } from '../lib/JiraClient';
 import { JiraConnectionsReader } from '../lib/connections';
 import { resolveEntityProject } from '../lib/entityProject';
+import { assertPermission, jiraWorkItemReadPermission } from '../permissions';
 
 export type JiraSearchFilters = {
   projectKey?: string;
@@ -51,9 +53,10 @@ export function buildJql(filters: JiraSearchFilters): string {
 export function registerSearchWorkItemsAction(options: {
   actionsRegistry: ActionsRegistryService;
   connections: JiraConnectionsReader;
+  permissions: PermissionsService;
   catalog: CatalogService;
 }) {
-  const { actionsRegistry, connections, catalog } = options;
+  const { actionsRegistry, connections, permissions, catalog } = options;
 
   actionsRegistry.register({
     name: 'search-work-items',
@@ -115,6 +118,12 @@ export function registerSearchWorkItemsAction(options: {
             .max(100)
             .optional()
             .describe('Maximum number of results to return, default 25'),
+          pageToken: z
+            .string()
+            .optional()
+            .describe(
+              'An opaque cursor from a previous invocation to fetch the next page of results',
+            ),
           host: z
             .string()
             .optional()
@@ -136,9 +145,20 @@ export function registerSearchWorkItemsAction(options: {
               }),
             )
             .describe('The matching issues, most recently updated first'),
+          nextPageToken: z
+            .string()
+            .optional()
+            .describe(
+              'Cursor for the next page of results; absent when no further results remain',
+            ),
         }),
     },
     action: async ({ input, credentials }) => {
+      await assertPermission(
+        permissions,
+        jiraWorkItemReadPermission,
+        credentials,
+      );
       if (input.projectKey !== undefined && input.entityRef !== undefined) {
         throw new InputError(
           'Provide either "projectKey" or "entityRef", not both',
@@ -186,6 +206,7 @@ export function registerSearchWorkItemsAction(options: {
         output: await client.searchIssues({
           jql,
           maxResults: input.maxResults ?? 25,
+          pageToken: input.pageToken,
         }),
       };
     },

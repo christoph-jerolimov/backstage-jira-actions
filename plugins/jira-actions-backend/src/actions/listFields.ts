@@ -4,7 +4,7 @@ import { JiraClient } from '../lib/JiraClient';
 import { JiraConnectionsReader } from '../lib/connections';
 import { assertPermission, jiraWorkItemReadPermission } from '../permissions';
 
-export function registerListProjectsAction(options: {
+export function registerListFieldsAction(options: {
   actionsRegistry: ActionsRegistryService;
   connections: JiraConnectionsReader;
   permissions: PermissionsService;
@@ -12,10 +12,10 @@ export function registerListProjectsAction(options: {
   const { actionsRegistry, connections, permissions } = options;
 
   actionsRegistry.register({
-    name: 'list-projects',
-    title: 'List Jira Projects',
+    name: 'list-fields',
+    title: 'List Jira Fields',
     description:
-      'Lists the Jira projects visible to the configured credentials, with their keys, names, IDs, descriptions and URLs. Optionally filters by a project name.',
+      'Lists the fields defined on the Jira instance, including custom fields, so that custom field IDs can be discovered for the customFields inputs.',
     attributes: {
       readOnly: true,
       destructive: false,
@@ -28,15 +28,8 @@ export function registerListProjectsAction(options: {
             .string()
             .optional()
             .describe(
-              'A case-insensitive filter matched against the project name or key',
+              'A case-insensitive filter matched against field names and IDs',
             ),
-          maxResults: z
-            .number()
-            .int()
-            .min(1)
-            .max(100)
-            .optional()
-            .describe('Maximum number of projects to return, default 50'),
           host: z
             .string()
             .optional()
@@ -46,20 +39,23 @@ export function registerListProjectsAction(options: {
         }),
       output: z =>
         z.object({
-          projects: z
+          fields: z
             .array(
               z.object({
-                key: z.string().describe('The project key, e.g. "PROJ"'),
-                name: z.string().describe('The project display name'),
-                id: z.string().describe('The internal Jira project ID'),
-                description: z
+                id: z
+                  .string()
+                  .describe('The field ID, e.g. "customfield_10020"'),
+                name: z.string().describe('The field display name'),
+                custom: z
+                  .boolean()
+                  .describe('Whether the field is a custom field'),
+                type: z
                   .string()
                   .optional()
-                  .describe('The project description, if any'),
-                url: z.string().describe('A browseable URL of the project'),
+                  .describe('The field value type, when known'),
               }),
             )
-            .describe('The visible Jira projects'),
+            .describe('The fields defined on the instance'),
         }),
     },
     action: async ({ input, credentials }) => {
@@ -70,11 +66,8 @@ export function registerListProjectsAction(options: {
       );
       const connection = connections.find({ host: input.host });
       const client = new JiraClient(connection);
-      const projects = await client.listProjects({
-        maxResults: input.maxResults ?? 50,
-        name: input.name,
-      });
-      return { output: { projects } };
+      const fields = await client.listFields({ name: input.name });
+      return { output: { fields } };
     },
   });
 }

@@ -1,12 +1,15 @@
+import { PermissionsService } from '@backstage/backend-plugin-api';
 import { ActionsRegistryService } from '@backstage/backend-plugin-api/alpha';
 import { JiraClient } from '../lib/JiraClient';
 import { JiraConnectionsReader } from '../lib/connections';
+import { assertPermission, jiraWorkItemWritePermission } from '../permissions';
 
 export function registerSetWorkItemParentAction(options: {
   actionsRegistry: ActionsRegistryService;
   connections: JiraConnectionsReader;
+  permissions: PermissionsService;
 }) {
-  const { actionsRegistry, connections } = options;
+  const { actionsRegistry, connections, permissions } = options;
 
   actionsRegistry.register({
     name: 'set-work-item-parent',
@@ -41,7 +44,12 @@ export function registerSetWorkItemParentAction(options: {
           url: z.string().describe('A browseable URL of the issue'),
         }),
     },
-    action: async ({ input, logger }) => {
+    action: async ({ input, credentials, logger }) => {
+      await assertPermission(
+        permissions,
+        jiraWorkItemWritePermission,
+        credentials,
+      );
       const connection = connections.find({ host: input.host });
       const client = new JiraClient(connection);
       await client.setParent(input.issueKey, input.parentKey);

@@ -1,0 +1,47 @@
+apiVersion: scaffolder.backstage.io/v1beta3
+kind: Template
+metadata:
+  name: 'jira-test-move-to-sprint'
+  title: 'Jira Test: Move to Sprint'
+  description: 'Moves Jira work items into a sprint via the jira-actions:move-to-sprint action.'
+  tags:
+    - jira
+    - test
+spec:
+  owner: user:guest
+  type: jira-test
+  parameters:
+    - title: Move to sprint
+      required:
+        - sprintId
+        - issueKeys
+      properties:
+        sprintId:
+          title: 'Sprint ID'
+          type: string
+          description: 'The ID of the sprint, as returned by list-sprints'
+        issueKeys:
+          title: 'Issue keys'
+          type: array
+          description: 'The keys of the issues to move, at most fifty'
+          items:
+            type: string
+        host:
+          title: 'Jira host'
+          type: string
+          description: 'Only needed when multiple Jira connections are configured'
+  steps:
+    - id: invoke
+      name: 'Move to sprint'
+      action: jira-actions:move-to-sprint
+      input:
+        sprintId: ${{ parameters.sprintId }}
+        issueKeys: ${{ parameters.issueKeys }}
+        host: ${{ parameters.host }}
+  output:
+    text:
+      - title: Result
+        content: |
+          ```json
+          ${{ steps.invoke.output | dump(2) }}
+          ```

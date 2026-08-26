@@ -13,15 +13,28 @@ so that they can be invoked through the actions service and — via
 | `jira-actions:update-work-item`     | Modifies fields (summary, description, labels, assignee, issue type) of an existing Jira issue.  |
 | `jira-actions:rename-work-item`     | Changes only the summary (title) of an issue.                                                    |
 | `jira-actions:set-work-item-parent` | Changes only the parent of an issue, e.g. to move it under a different epic.                     |
-| `jira-actions:get-work-item`        | Reads a single issue by key, with the description rendered as Markdown (or text). Read-only.     |
-| `jira-actions:search-work-items`    | Searches issues by raw JQL or simplified filters. Read-only.                                     |
+| `jira-actions:delete-work-item`     | Permanently deletes an issue. The only action marked destructive.                                |
+| `jira-actions:get-work-item`        | Reads a single issue by key, including its links and selected custom fields. Read-only.          |
+| `jira-actions:search-work-items`    | Searches issues by raw JQL or simplified filters, with page cursors. Read-only.                  |
+| `jira-actions:search-users`         | Finds users and returns the identity value usable as assignee or watcher. Read-only.             |
 | `jira-actions:add-comment`          | Adds a Markdown comment to an issue.                                                             |
-| `jira-actions:get-comments`         | Reads the comments of an issue, bodies rendered as Markdown by default. Read-only.               |
+| `jira-actions:get-comments`         | Reads the comments of an issue with page cursors, bodies as Markdown by default. Read-only.      |
 | `jira-actions:add-label`            | Adds a single label to an issue without affecting its other labels.                              |
 | `jira-actions:remove-label`         | Removes a single label from an issue without affecting its other labels.                         |
+| `jira-actions:link-work-items`      | Links two issues with a relation such as "blocks" or "duplicates".                               |
+| `jira-actions:list-link-types`      | Lists the available issue link types with their relation descriptions. Read-only.                |
+| `jira-actions:list-transitions`     | Lists the statuses an issue can currently move to. Read-only.                                    |
 | `jira-actions:transition-work-item` | Moves an issue to a target status by name via the matching workflow transition.                  |
 | `jira-actions:list-projects`        | Lists the visible Jira projects with URLs and descriptions, optionally name-filtered. Read-only. |
 | `jira-actions:list-issue-types`     | Lists the issue types available in a project. Read-only.                                         |
+| `jira-actions:list-fields`          | Lists the instance's fields, including custom fields with their IDs. Read-only.                  |
+| `jira-actions:get-worklogs`         | Reads the work log entries of an issue. Read-only.                                               |
+| `jira-actions:add-worklog`          | Logs work on an issue with a Jira duration such as "2h 30m".                                     |
+| `jira-actions:add-watcher`          | Adds a user as a watcher of an issue.                                                            |
+| `jira-actions:remove-watcher`       | Removes a user from the watchers of an issue.                                                    |
+| `jira-actions:list-boards`          | Lists the visible agile boards, optionally filtered by name or project. Read-only.               |
+| `jira-actions:list-sprints`         | Lists the sprints of a board, optionally filtered by state. Read-only.                           |
+| `jira-actions:move-to-sprint`       | Moves up to fifty issues into a sprint.                                                          |
 
 All actions accept an optional `host` input to select a specific Jira
 connection when more than one is configured; without it, the first configured
@@ -32,6 +45,20 @@ Usage notes:
 - `search-work-items` takes either a raw `jql` input or simplified filters
   (`projectKey`, `text`, `status`, `issueType`, `assignee`, `labels`) — not
   both. Filters are compiled to JQL ordered by most recently updated.
+- `search-work-items` and `get-comments` page with an opaque cursor: pass a
+  previous run's `nextPageToken` output as the `pageToken` input to fetch
+  the next page; the token is absent once no further results remain.
+- `create-work-item`, `update-work-item`, and `get-work-item` handle custom
+  fields via `customFields` (values keyed by field id on create/update,
+  a list of field ids to read on get); `list-fields` discovers the ids.
+  Values are passed to Jira verbatim — Jira validates them.
+- `link-work-items` accepts the link type by name (`Blocks`) or by either
+  relation description (`blocks`, `is blocked by`); an inward description
+  reverses the link direction so the relation reads correctly. Unknown
+  types fail with the list of available ones (see `list-link-types`).
+- `assignee`, `user` (watchers), and search-user `id` values are account
+  IDs on Jira Cloud and usernames on Data Center; `search-users` returns
+  exactly the value the other inputs expect.
 - `update-work-item` edits labels either wholesale via `labels` (replacing
   the full list) or incrementally via `addLabels`/`removeLabels` — the two
   styles cannot be combined in one call. The dedicated `add-label` and
@@ -59,6 +86,25 @@ Usage notes:
   Markdown by default, the raw ADF document for `adf`, or plain text for
   `text` (ADF nodes outside the Markdown subset, such as tables and
   mentions, degrade to their text content in the string renderings).
+  Worklog comments carry the same selector as `commentFormat` on
+  `get-worklogs`/`add-worklog`.
+
+## Permissions
+
+The plugin registers three permissions with the Backstage
+[permission framework](https://backstage.io/docs/permissions/overview) and
+authorizes the caller before every Jira call:
+
+| Permission              | Covers                              |
+| ----------------------- | ----------------------------------- |
+| `jira.work-item.read`   | All read-only actions               |
+| `jira.work-item.write`  | All modifying actions except delete |
+| `jira.work-item.delete` | `delete-work-item`                  |
+
+Under Backstage's default allow-all policy nothing changes; a custom
+permission policy can deny any of the three (for example withholding
+`jira.work-item.delete` from everyone but admins) and the affected actions
+fail with a NotAllowed error before Jira is contacted.
 
 ## Configuration
 

@@ -1,7 +1,9 @@
+import { PermissionsService } from '@backstage/backend-plugin-api';
 import { ActionsRegistryService } from '@backstage/backend-plugin-api/alpha';
 import { InputError } from '@backstage/errors';
 import { JiraClient } from '../lib/JiraClient';
 import { JiraConnectionsReader } from '../lib/connections';
+import { assertPermission, jiraWorkItemWritePermission } from '../permissions';
 
 const UPDATABLE_FIELDS = [
   'summary',
@@ -11,13 +13,15 @@ const UPDATABLE_FIELDS = [
   'removeLabels',
   'assignee',
   'issueType',
+  'customFields',
 ] as const;
 
 export function registerUpdateWorkItemAction(options: {
   actionsRegistry: ActionsRegistryService;
   connections: JiraConnectionsReader;
+  permissions: PermissionsService;
 }) {
-  const { actionsRegistry, connections } = options;
+  const { actionsRegistry, connections, permissions } = options;
 
   actionsRegistry.register({
     name: 'update-work-item',
@@ -77,6 +81,12 @@ export function registerUpdateWorkItemAction(options: {
             .string()
             .optional()
             .describe('The new issue type name, e.g. "Story", "Bug" or "Task"'),
+          customFields: z
+            .record(z.any())
+            .optional()
+            .describe(
+              'New values for additional issue fields keyed by Jira field ID (e.g. "customfield_10020", discoverable via list-fields), passed to Jira verbatim',
+            ),
           host: z
             .string()
             .optional()
@@ -90,7 +100,12 @@ export function registerUpdateWorkItemAction(options: {
           url: z.string().describe('A browseable URL of the updated issue'),
         }),
     },
-    action: async ({ input, logger }) => {
+    action: async ({ input, credentials, logger }) => {
+      await assertPermission(
+        permissions,
+        jiraWorkItemWritePermission,
+        credentials,
+      );
       if (UPDATABLE_FIELDS.every(field => input[field] === undefined)) {
         throw new InputError(
           `At least one field to update must be provided, one of: ${UPDATABLE_FIELDS.join(

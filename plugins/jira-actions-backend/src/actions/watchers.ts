@@ -4,7 +4,7 @@ import { JiraClient } from '../lib/JiraClient';
 import { JiraConnectionsReader } from '../lib/connections';
 import { assertPermission, jiraWorkItemWritePermission } from '../permissions';
 
-function registerLabelAction(options: {
+function registerWatcherAction(options: {
   actionsRegistry: ActionsRegistryService;
   connections: JiraConnectionsReader;
   permissions: PermissionsService;
@@ -13,15 +13,15 @@ function registerLabelAction(options: {
   const { actionsRegistry, connections, permissions, mode } = options;
 
   actionsRegistry.register({
-    name: `${mode}-label`,
+    name: `${mode}-watcher`,
     title:
       mode === 'add'
-        ? 'Add Label to Jira Work Item'
-        : 'Remove Label from Jira Work Item',
+        ? 'Add Watcher to Jira Work Item'
+        : 'Remove Watcher from Jira Work Item',
     description:
       mode === 'add'
-        ? 'Adds a single label to a Jira work item (issue) without affecting its other labels. Adding an existing label is a no-op.'
-        : 'Removes a single label from a Jira work item (issue) without affecting its other labels. Removing an absent label is a no-op.',
+        ? 'Adds a user as a watcher of a Jira work item (issue). Adding an existing watcher is a no-op.'
+        : 'Removes a user from the watchers of a Jira work item (issue).',
     attributes: {
       readOnly: false,
       destructive: false,
@@ -33,7 +33,11 @@ function registerLabelAction(options: {
           issueKey: z
             .string()
             .describe('The key of the issue, e.g. "PROJ-123"'),
-          label: z.string().describe(`The label to ${mode}`),
+          user: z
+            .string()
+            .describe(
+              'The user to add or remove: a Jira account ID on Jira Cloud, a username on Jira Data Center (as returned by search-users)',
+            ),
           host: z
             .string()
             .optional()
@@ -45,12 +49,9 @@ function registerLabelAction(options: {
         z.object({
           key: z.string().describe('The issue key'),
           url: z.string().describe('A browseable URL of the issue'),
-          labels: z
-            .array(z.string())
-            .describe("The issue's labels after the change"),
         }),
     },
-    action: async ({ input, credentials, logger }) => {
+    action: async ({ input, logger, credentials }) => {
       await assertPermission(
         permissions,
         jiraWorkItemWritePermission,
@@ -58,38 +59,38 @@ function registerLabelAction(options: {
       );
       const connection = connections.find({ host: input.host });
       const client = new JiraClient(connection);
-      const labels = await client.editLabels(
-        input.issueKey,
-        mode === 'add' ? { add: [input.label] } : { remove: [input.label] },
-      );
+      if (mode === 'add') {
+        await client.addWatcher(input.issueKey, input.user);
+      } else {
+        await client.removeWatcher(input.issueKey, input.user);
+      }
       logger.info(
-        `${mode === 'add' ? 'Added' : 'Removed'} label "${
-          input.label
-        }" on Jira issue ${input.issueKey}`,
+        `${mode === 'add' ? 'Added' : 'Removed'} watcher on Jira issue ${
+          input.issueKey
+        }`,
       );
       return {
         output: {
           key: input.issueKey,
           url: client.browseUrl(input.issueKey),
-          labels,
         },
       };
     },
   });
 }
 
-export function registerAddLabelAction(options: {
+export function registerAddWatcherAction(options: {
   actionsRegistry: ActionsRegistryService;
   connections: JiraConnectionsReader;
   permissions: PermissionsService;
 }) {
-  registerLabelAction({ ...options, mode: 'add' });
+  registerWatcherAction({ ...options, mode: 'add' });
 }
 
-export function registerRemoveLabelAction(options: {
+export function registerRemoveWatcherAction(options: {
   actionsRegistry: ActionsRegistryService;
   connections: JiraConnectionsReader;
   permissions: PermissionsService;
 }) {
-  registerLabelAction({ ...options, mode: 'remove' });
+  registerWatcherAction({ ...options, mode: 'remove' });
 }

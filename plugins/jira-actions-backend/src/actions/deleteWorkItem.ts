@@ -2,9 +2,9 @@ import { PermissionsService } from '@backstage/backend-plugin-api';
 import { ActionsRegistryService } from '@backstage/backend-plugin-api/alpha';
 import { JiraClient } from '../lib/JiraClient';
 import { JiraConnectionsReader } from '../lib/connections';
-import { assertPermission, jiraWorkItemWritePermission } from '../permissions';
+import { assertPermission, jiraWorkItemDeletePermission } from '../permissions';
 
-export function registerRenameWorkItemAction(options: {
+export function registerDeleteWorkItemAction(options: {
   actionsRegistry: ActionsRegistryService;
   connections: JiraConnectionsReader;
   permissions: PermissionsService;
@@ -12,22 +12,27 @@ export function registerRenameWorkItemAction(options: {
   const { actionsRegistry, connections, permissions } = options;
 
   actionsRegistry.register({
-    name: 'rename-work-item',
-    title: 'Rename Jira Work Item',
+    name: 'delete-work-item',
+    title: 'Delete Jira Work Item',
     description:
-      'Changes only the summary (title) of a Jira work item (issue).',
+      'Permanently deletes a Jira work item (issue). This cannot be undone.',
     attributes: {
       readOnly: false,
-      destructive: false,
-      idempotent: true,
+      destructive: true,
+      idempotent: false,
     },
     schema: {
       input: z =>
         z.object({
           issueKey: z
             .string()
-            .describe('The key of the issue to rename, e.g. "PROJ-123"'),
-          summary: z.string().describe('The new summary (title) of the issue'),
+            .describe('The key of the issue to delete, e.g. "PROJ-123"'),
+          deleteSubtasks: z
+            .boolean()
+            .optional()
+            .describe(
+              "Also delete the issue's sub-tasks; without it, deleting an issue that has sub-tasks fails (default false)",
+            ),
           host: z
             .string()
             .optional()
@@ -37,26 +42,22 @@ export function registerRenameWorkItemAction(options: {
         }),
       output: z =>
         z.object({
-          key: z.string().describe('The issue key'),
-          summary: z.string().describe('The new summary of the issue'),
-          url: z.string().describe('A browseable URL of the issue'),
+          key: z.string().describe('The key of the deleted issue'),
         }),
     },
-    action: async ({ input, credentials, logger }) => {
+    action: async ({ input, logger, credentials }) => {
       await assertPermission(
         permissions,
-        jiraWorkItemWritePermission,
+        jiraWorkItemDeletePermission,
         credentials,
       );
       const connection = connections.find({ host: input.host });
       const client = new JiraClient(connection);
-      const result = await client.updateIssue(input.issueKey, {
-        summary: input.summary,
+      await client.deleteIssue(input.issueKey, {
+        deleteSubtasks: input.deleteSubtasks,
       });
-      logger.info(`Renamed Jira issue ${result.key} on ${connection.host}`);
-      return {
-        output: { key: result.key, summary: input.summary, url: result.url },
-      };
+      logger.info(`Deleted Jira issue ${input.issueKey}`);
+      return { output: { key: input.issueKey } };
     },
   });
 }

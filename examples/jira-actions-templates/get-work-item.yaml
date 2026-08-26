@@ -27,6 +27,12 @@ spec:
             - markdown
             - adf
             - text
+        customFields:
+          title: 'Custom fields'
+          type: array
+          description: 'Jira field IDs to read in addition to the standard fields, e.g. customfield_10020'
+          items:
+            type: string
         host:
           title: 'Jira host'
           type: string
@@ -38,6 +44,7 @@ spec:
       input:
         issueKey: ${{ parameters.issueKey }}
         descriptionFormat: ${{ parameters.descriptionFormat }}
+        customFields: ${{ parameters.customFields }}
         host: ${{ parameters.host }}
   output:
     links:

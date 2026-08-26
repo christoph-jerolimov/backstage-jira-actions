@@ -4,7 +4,7 @@ import { JiraClient } from '../lib/JiraClient';
 import { JiraConnectionsReader } from '../lib/connections';
 import { assertPermission, jiraWorkItemReadPermission } from '../permissions';
 
-export function registerListProjectsAction(options: {
+export function registerSearchUsersAction(options: {
   actionsRegistry: ActionsRegistryService;
   connections: JiraConnectionsReader;
   permissions: PermissionsService;
@@ -12,10 +12,10 @@ export function registerListProjectsAction(options: {
   const { actionsRegistry, connections, permissions } = options;
 
   actionsRegistry.register({
-    name: 'list-projects',
-    title: 'List Jira Projects',
+    name: 'search-users',
+    title: 'Search Jira Users',
     description:
-      'Lists the Jira projects visible to the configured credentials, with their keys, names, IDs, descriptions and URLs. Optionally filters by a project name.',
+      'Finds Jira users by name, email, or username, returning the identity value usable as an assignee or watcher input.',
     attributes: {
       readOnly: true,
       destructive: false,
@@ -24,11 +24,10 @@ export function registerListProjectsAction(options: {
     schema: {
       input: z =>
         z.object({
-          name: z
+          query: z
             .string()
-            .optional()
             .describe(
-              'A case-insensitive filter matched against the project name or key',
+              'The search text, matched against display names, emails, and usernames',
             ),
           maxResults: z
             .number()
@@ -36,7 +35,7 @@ export function registerListProjectsAction(options: {
             .min(1)
             .max(100)
             .optional()
-            .describe('Maximum number of projects to return, default 50'),
+            .describe('Maximum number of users to return, default 25'),
           host: z
             .string()
             .optional()
@@ -46,20 +45,23 @@ export function registerListProjectsAction(options: {
         }),
       output: z =>
         z.object({
-          projects: z
+          users: z
             .array(
               z.object({
-                key: z.string().describe('The project key, e.g. "PROJ"'),
-                name: z.string().describe('The project display name'),
-                id: z.string().describe('The internal Jira project ID'),
-                description: z
+                id: z
+                  .string()
+                  .describe(
+                    'The assignable identity: the account ID on Jira Cloud, the username on Jira Data Center',
+                  ),
+                displayName: z.string().describe("The user's display name"),
+                email: z
                   .string()
                   .optional()
-                  .describe('The project description, if any'),
-                url: z.string().describe('A browseable URL of the project'),
+                  .describe("The user's email address, when visible"),
+                active: z.boolean().describe('Whether the user is active'),
               }),
             )
-            .describe('The visible Jira projects'),
+            .describe('The matching Jira users'),
         }),
     },
     action: async ({ input, credentials }) => {
@@ -70,11 +72,10 @@ export function registerListProjectsAction(options: {
       );
       const connection = connections.find({ host: input.host });
       const client = new JiraClient(connection);
-      const projects = await client.listProjects({
-        maxResults: input.maxResults ?? 50,
-        name: input.name,
+      const users = await client.searchUsers(input.query, {
+        maxResults: input.maxResults ?? 25,
       });
-      return { output: { projects } };
+      return { output: { users } };
     },
   });
 }

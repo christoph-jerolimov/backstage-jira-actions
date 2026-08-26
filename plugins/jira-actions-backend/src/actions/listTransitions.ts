@@ -4,7 +4,7 @@ import { JiraClient } from '../lib/JiraClient';
 import { JiraConnectionsReader } from '../lib/connections';
 import { assertPermission, jiraWorkItemReadPermission } from '../permissions';
 
-export function registerListProjectsAction(options: {
+export function registerListTransitionsAction(options: {
   actionsRegistry: ActionsRegistryService;
   connections: JiraConnectionsReader;
   permissions: PermissionsService;
@@ -12,10 +12,10 @@ export function registerListProjectsAction(options: {
   const { actionsRegistry, connections, permissions } = options;
 
   actionsRegistry.register({
-    name: 'list-projects',
-    title: 'List Jira Projects',
+    name: 'list-transitions',
+    title: 'List Jira Work Item Transitions',
     description:
-      'Lists the Jira projects visible to the configured credentials, with their keys, names, IDs, descriptions and URLs. Optionally filters by a project name.',
+      'Lists the workflow transitions currently available on a Jira work item (issue), i.e. the statuses it can move to.',
     attributes: {
       readOnly: true,
       destructive: false,
@@ -24,19 +24,9 @@ export function registerListProjectsAction(options: {
     schema: {
       input: z =>
         z.object({
-          name: z
+          issueKey: z
             .string()
-            .optional()
-            .describe(
-              'A case-insensitive filter matched against the project name or key',
-            ),
-          maxResults: z
-            .number()
-            .int()
-            .min(1)
-            .max(100)
-            .optional()
-            .describe('Maximum number of projects to return, default 50'),
+            .describe('The key of the issue, e.g. "PROJ-123"'),
           host: z
             .string()
             .optional()
@@ -46,20 +36,19 @@ export function registerListProjectsAction(options: {
         }),
       output: z =>
         z.object({
-          projects: z
+          key: z.string().describe('The issue key'),
+          transitions: z
             .array(
               z.object({
-                key: z.string().describe('The project key, e.g. "PROJ"'),
-                name: z.string().describe('The project display name'),
-                id: z.string().describe('The internal Jira project ID'),
-                description: z
+                id: z.string().describe('The transition ID'),
+                name: z.string().describe('The transition name'),
+                toStatus: z
                   .string()
                   .optional()
-                  .describe('The project description, if any'),
-                url: z.string().describe('A browseable URL of the project'),
+                  .describe('The status the transition leads to'),
               }),
             )
-            .describe('The visible Jira projects'),
+            .describe('The currently available transitions'),
         }),
     },
     action: async ({ input, credentials }) => {
@@ -70,11 +59,8 @@ export function registerListProjectsAction(options: {
       );
       const connection = connections.find({ host: input.host });
       const client = new JiraClient(connection);
-      const projects = await client.listProjects({
-        maxResults: input.maxResults ?? 50,
-        name: input.name,
-      });
-      return { output: { projects } };
+      const transitions = await client.listTransitions(input.issueKey);
+      return { output: { key: input.issueKey, transitions } };
     },
   });
 }

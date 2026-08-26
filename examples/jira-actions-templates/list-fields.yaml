@@ -1,0 +1,43 @@
+apiVersion: scaffolder.backstage.io/v1beta3
+kind: Template
+metadata:
+  name: 'jira-test-list-fields'
+  title: 'Jira Test: List Fields'
+  description: 'Lists the fields defined on the Jira instance, including custom fields, via the jira-actions:list-fields action.'
+  tags:
+    - jira
+    - test
+spec:
+  owner: user:guest
+  type: jira-test
+  parameters:
+    - title: List fields
+      properties:
+        name:
+          title: 'Name filter'
+          type: string
+          description: 'A case-insensitive filter matched against field names and IDs'
+        host:
+          title: 'Jira host'
+          type: string
+          description: 'Only needed when multiple Jira connections are configured'
+  steps:
+    - id: invoke
+      name: 'List fields'
+      action: jira-actions:list-fields
+      input:
+        name: ${{ parameters.name }}
+        host: ${{ parameters.host }}
+  output:
+    text:
+      - title: 'Fields'
+        content: |
+          | ID | Name | Custom | Type |
+          | --- | --- | --- | --- |
+          {% for f in steps.invoke.output.fields %}| ${{ f.id }} | ${{ f.name }} | ${{ 'yes' if f.custom else 'no' }} | ${{ f.type }} |
+          {% endfor %}
+      - title: 'JSON'
+        content: |
+          ```json
+          ${{ steps.invoke.output | dump(2) }}
+          ```

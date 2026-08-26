@@ -1,0 +1,67 @@
+apiVersion: scaffolder.backstage.io/v1beta3
+kind: Template
+metadata:
+  name: 'jira-test-add-worklog'
+  title: 'Jira Test: Add Worklog'
+  description: 'Logs work on a Jira work item via the jira-actions:add-worklog action.'
+  tags:
+    - jira
+    - test
+spec:
+  owner: user:guest
+  type: jira-test
+  parameters:
+    - title: Add worklog
+      required:
+        - issueKey
+        - timeSpent
+      properties:
+        issueKey:
+          title: 'Issue key'
+          type: string
+          description: 'The key of the issue, e.g. PROJ-123'
+        timeSpent:
+          title: 'Time spent'
+          type: string
+          description: 'The time spent as a Jira duration, e.g. 2h 30m'
+        comment:
+          title: 'Comment'
+          type: string
+          description: 'An optional Markdown comment (or ADF as JSON, or literal text, per the comment format)'
+        commentFormat:
+          title: 'Comment format'
+          type: string
+          description: 'How to interpret the comment: markdown (default), adf, or text'
+          enum:
+            - markdown
+            - adf
+            - text
+        started:
+          title: 'Started'
+          type: string
+          description: 'When the work was started, as an ISO timestamp; optional'
+        host:
+          title: 'Jira host'
+          type: string
+          description: 'Only needed when multiple Jira connections are configured'
+  steps:
+    - id: invoke
+      name: 'Add worklog'
+      action: jira-actions:add-worklog
+      input:
+        issueKey: ${{ parameters.issueKey }}
+        timeSpent: ${{ parameters.timeSpent }}
+        comment: '${{ parameters.comment }}'
+        commentFormat: ${{ parameters.commentFormat }}
+        started: ${{ parameters.started }}
+        host: ${{ parameters.host }}
+  output:
+    links:
+      - title: Open issue
+        url: ${{ steps.invoke.output.url }}
+    text:
+      - title: Result
+        content: |
+          ```json
+          ${{ steps.invoke.output | dump(2) }}
+          ```

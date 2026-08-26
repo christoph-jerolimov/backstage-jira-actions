@@ -59,6 +59,10 @@ spec:
           title: 'Parent issue key'
           type: string
           description: 'The key of a parent issue, for sub-tasks or issues under an epic'
+        customFields:
+          title: 'Custom fields'
+          type: object
+          description: 'Additional issue fields keyed by Jira field ID, e.g. customfield_10020; passed to Jira verbatim'
         host:
           title: 'Jira host'
           type: string
@@ -77,6 +81,7 @@ spec:
         labels: ${{ parameters.labels }}
         assignee: ${{ parameters.assignee }}
         parentKey: ${{ parameters.parentKey }}
+        customFields: ${{ parameters.customFields }}
         host: ${{ parameters.host }}
   output:
     links:
