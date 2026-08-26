@@ -12,7 +12,7 @@ export function registerGetWorkItemAction(options: {
     name: 'get-work-item',
     title: 'Get Jira Work Item',
     description:
-      'Reads a single Jira work item (issue) by its key, returning its summary, status, type, and other fields with the description rendered as plain text.',
+      'Reads a single Jira work item (issue) by its key, returning its summary, status, type, and other fields with the description rendered as Markdown (or plain text on request).',
     attributes: {
       readOnly: true,
       destructive: false,
@@ -24,6 +24,12 @@ export function registerGetWorkItemAction(options: {
           issueKey: z
             .string()
             .describe('The key of the issue to read, e.g. "PROJ-123"'),
+          descriptionFormat: z
+            .enum(['markdown', 'adf', 'text'])
+            .optional()
+            .describe(
+              'How to render the description: "markdown" (default), "adf" for the raw ADF document, or "text" for plain text with formatting dropped',
+            ),
           host: z
             .string()
             .optional()
@@ -39,9 +45,11 @@ export function registerGetWorkItemAction(options: {
           issueType: z.string().describe('The issue type name'),
           url: z.string().describe('A browseable URL of the issue'),
           description: z
-            .string()
+            .union([z.string(), z.record(z.any())])
             .optional()
-            .describe('The issue description as plain text'),
+            .describe(
+              'The issue description in the requested format: Markdown by default, the raw ADF document for "adf", or plain text for "text"',
+            ),
           assignee: z
             .string()
             .optional()
@@ -63,7 +71,11 @@ export function registerGetWorkItemAction(options: {
     action: async ({ input }) => {
       const connection = connections.find({ host: input.host });
       const client = new JiraClient(connection);
-      return { output: await client.getIssue(input.issueKey) };
+      return {
+        output: await client.getIssue(input.issueKey, {
+          descriptionFormat: input.descriptionFormat ?? 'markdown',
+        }),
+      };
     },
   });
 }

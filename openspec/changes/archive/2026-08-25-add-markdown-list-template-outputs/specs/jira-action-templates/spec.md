@@ -1,10 +1,4 @@
-# jira-action-templates Specification
-
-## Purpose
-
-Lets every Jira registry action be exercised end-to-end from the Backstage software templates UI: one test template per action collects the action's inputs as parameters, invokes the registry action directly as its template step, and surfaces its output.
-
-## Requirements
+## MODIFIED Requirements
 
 ### Requirement: One test template per Jira action
 

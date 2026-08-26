@@ -23,7 +23,15 @@ spec:
         body:
           title: 'Comment'
           type: string
-          description: 'The plain-text comment body'
+          description: 'The Markdown comment body (or ADF as JSON, or literal text, per the body format)'
+        bodyFormat:
+          title: 'Body format'
+          type: string
+          description: 'How to interpret the body: markdown (default), adf, or text'
+          enum:
+            - markdown
+            - adf
+            - text
         host:
           title: 'Jira host'
           type: string
@@ -35,6 +43,7 @@ spec:
       input:
         issueKey: ${{ parameters.issueKey }}
         body: ${{ parameters.body }}
+        bodyFormat: ${{ parameters.bodyFormat }}
         host: ${{ parameters.host }}
   output:
     links:

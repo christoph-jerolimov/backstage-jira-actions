@@ -36,7 +36,11 @@ spec:
         host: ${{ parameters.host }}
   output:
     text:
-      - title: Result
+      - title: 'Issue types'
+        content: |
+          {% for t in steps.invoke.output.issueTypes %}- **${{ t.name }}**{% if t.subtask %} (sub-task){% endif %}{% if t.description %} — ${{ t.description }}{% endif %}
+          {% endfor %}
+      - title: 'JSON'
         content: |
           ```json
           ${{ steps.invoke.output | dump(2) }}

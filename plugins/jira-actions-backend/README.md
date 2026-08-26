@@ -11,9 +11,9 @@ so that they can be invoked through the actions service and — via
 | ----------------------------------- | ----------------------------------------------------------------------------------------------- |
 | `jira-actions:create-work-item`     | Creates a work item (issue) such as a Story, Bug or Task in a Jira project.                     |
 | `jira-actions:update-work-item`     | Modifies fields (summary, description, labels, assignee, issue type) of an existing Jira issue. |
-| `jira-actions:get-work-item`        | Reads a single issue by key, with the description rendered as plain text. Read-only.            |
+| `jira-actions:get-work-item`        | Reads a single issue by key, with the description rendered as Markdown (or text). Read-only.    |
 | `jira-actions:search-work-items`    | Searches issues by raw JQL or simplified filters. Read-only.                                    |
-| `jira-actions:add-comment`          | Adds a plain-text comment to an issue.                                                          |
+| `jira-actions:add-comment`          | Adds a Markdown comment to an issue.                                                            |
 | `jira-actions:transition-work-item` | Moves an issue to a target status by name via the matching workflow transition.                 |
 | `jira-actions:list-projects`        | Lists the visible Jira projects. Read-only.                                                     |
 | `jira-actions:list-issue-types`     | Lists the issue types available in a project. Read-only.                                        |
@@ -31,10 +31,20 @@ Usage notes:
   against the issue's currently available transitions. If the issue already
   has the target status the action succeeds without changes; if the status is
   unreachable, the error lists the statuses that are reachable.
-- Rich-text fields are plain text on both ends: descriptions and comment
-  bodies are written as simple ADF paragraphs on Jira Cloud, and Cloud
-  descriptions are read back as plain text (formatting, mentions, and media
-  are dropped).
+- Descriptions and comment bodies carry a format selector
+  (`descriptionFormat` on create/update, `bodyFormat` on add-comment):
+  `markdown` (default), `adf`, or `text`. With `markdown`, a supported
+  subset — headings, bullet/ordered lists, fenced code blocks (with
+  language), blockquotes, and inline bold/italic/code/links — is converted
+  to real ADF on Jira Cloud, and anything outside the subset degrades to
+  plain text. With `text`, the string is stored literally with no Markdown
+  interpretation. With `adf`, the input is an ADF document (an object, or a
+  JSON-encoded string) sent to Jira verbatim — Jira Cloud only. On Jira
+  Data Center strings pass through unchanged and `adf` is rejected.
+- `get-work-item` renders Cloud descriptions back per `descriptionFormat`:
+  Markdown by default, the raw ADF document for `adf`, or plain text for
+  `text` (ADF nodes outside the Markdown subset, such as tables and
+  mentions, degrade to their text content in the string renderings).
 
 ## Configuration
 

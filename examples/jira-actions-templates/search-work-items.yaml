@@ -73,7 +73,11 @@ spec:
         host: ${{ parameters.host }}
   output:
     text:
-      - title: Result
+      - title: 'Work items'
+        content: |
+          {% for i in steps.invoke.output.items %}- [${{ i.key }}](${{ i.url }}) — ${{ i.summary }} (${{ i.status }})
+          {% endfor %}
+      - title: 'JSON'
         content: |
           ```json
           ${{ steps.invoke.output | dump(2) }}
