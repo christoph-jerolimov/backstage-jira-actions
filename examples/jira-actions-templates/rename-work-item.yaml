@@ -1,0 +1,48 @@
+apiVersion: scaffolder.backstage.io/v1beta3
+kind: Template
+metadata:
+  name: 'jira-test-rename-work-item'
+  title: 'Jira Test: Rename Work Item'
+  description: 'Changes only the summary (title) of a Jira work item via the jira-actions:rename-work-item action.'
+  tags:
+    - jira
+    - test
+spec:
+  owner: user:guest
+  type: jira-test
+  parameters:
+    - title: Rename work item
+      required:
+        - issueKey
+        - summary
+      properties:
+        issueKey:
+          title: 'Issue key'
+          type: string
+          description: 'The key of the issue to rename, e.g. PROJ-123'
+        summary:
+          title: 'New summary'
+          type: string
+          description: 'The new summary (title) of the issue'
+        host:
+          title: 'Jira host'
+          type: string
+          description: 'Only needed when multiple Jira connections are configured'
+  steps:
+    - id: invoke
+      name: 'Rename work item'
+      action: jira-actions:rename-work-item
+      input:
+        issueKey: ${{ parameters.issueKey }}
+        summary: ${{ parameters.summary }}
+        host: ${{ parameters.host }}
+  output:
+    links:
+      - title: Open issue
+        url: ${{ steps.invoke.output.url }}
+    text:
+      - title: Result
+        content: |
+          ```json
+          ${{ steps.invoke.output | dump(2) }}
+          ```

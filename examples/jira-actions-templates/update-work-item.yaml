@@ -41,6 +41,18 @@ spec:
           description: 'The full new list of labels, replacing existing labels'
           items:
             type: string
+        addLabels:
+          title: 'Add labels'
+          type: array
+          description: 'Labels to add to the existing labels; cannot be combined with Labels'
+          items:
+            type: string
+        removeLabels:
+          title: 'Remove labels'
+          type: array
+          description: 'Labels to remove from the existing labels; cannot be combined with Labels'
+          items:
+            type: string
         assignee:
           title: 'New assignee'
           type: string
@@ -63,6 +75,8 @@ spec:
         description: '${{ parameters.description }}'
         descriptionFormat: ${{ parameters.descriptionFormat }}
         labels: ${{ parameters.labels }}
+        addLabels: ${{ parameters.addLabels }}
+        removeLabels: ${{ parameters.removeLabels }}
         assignee: ${{ parameters.assignee }}
         issueType: ${{ parameters.issueType }}
         host: ${{ parameters.host }}

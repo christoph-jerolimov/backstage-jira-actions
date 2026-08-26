@@ -1,0 +1,48 @@
+apiVersion: scaffolder.backstage.io/v1beta3
+kind: Template
+metadata:
+  name: 'jira-test-remove-label'
+  title: 'Jira Test: Remove Label'
+  description: 'Removes a single label from a Jira work item via the jira-actions:remove-label action.'
+  tags:
+    - jira
+    - test
+spec:
+  owner: user:guest
+  type: jira-test
+  parameters:
+    - title: Remove label
+      required:
+        - issueKey
+        - label
+      properties:
+        issueKey:
+          title: 'Issue key'
+          type: string
+          description: 'The key of the issue, e.g. PROJ-123'
+        label:
+          title: 'Label'
+          type: string
+          description: 'The label to remove'
+        host:
+          title: 'Jira host'
+          type: string
+          description: 'Only needed when multiple Jira connections are configured'
+  steps:
+    - id: invoke
+      name: 'Remove label'
+      action: jira-actions:remove-label
+      input:
+        issueKey: ${{ parameters.issueKey }}
+        label: ${{ parameters.label }}
+        host: ${{ parameters.host }}
+  output:
+    links:
+      - title: Open issue
+        url: ${{ steps.invoke.output.url }}
+    text:
+      - title: Result
+        content: |
+          ```json
+          ${{ steps.invoke.output | dump(2) }}
+          ```

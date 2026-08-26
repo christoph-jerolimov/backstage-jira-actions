@@ -7,6 +7,8 @@ const UPDATABLE_FIELDS = [
   'summary',
   'description',
   'labels',
+  'addLabels',
+  'removeLabels',
   'assignee',
   'issueType',
 ] as const;
@@ -53,6 +55,18 @@ export function registerUpdateWorkItemAction(options: {
             .array(z.string())
             .optional()
             .describe('The full new list of labels, replacing existing labels'),
+          addLabels: z
+            .array(z.string())
+            .optional()
+            .describe(
+              'Labels to add to the existing labels; cannot be combined with "labels"',
+            ),
+          removeLabels: z
+            .array(z.string())
+            .optional()
+            .describe(
+              'Labels to remove from the existing labels; cannot be combined with "labels"',
+            ),
           assignee: z
             .string()
             .optional()
@@ -84,9 +98,25 @@ export function registerUpdateWorkItemAction(options: {
           )}`,
         );
       }
+      if (
+        input.labels !== undefined &&
+        (input.addLabels !== undefined || input.removeLabels !== undefined)
+      ) {
+        throw new InputError(
+          'The "labels" field replaces all labels and cannot be combined with "addLabels" or "removeLabels"',
+        );
+      }
       const connection = connections.find({ host: input.host });
       const client = new JiraClient(connection);
-      const result = await client.updateIssue(input.issueKey, input);
+      const labelEdits =
+        input.addLabels !== undefined || input.removeLabels !== undefined
+          ? { add: input.addLabels, remove: input.removeLabels }
+          : undefined;
+      const result = await client.updateIssue(
+        input.issueKey,
+        input,
+        labelEdits,
+      );
       logger.info(`Updated Jira issue ${result.key} on ${connection.host}`);
       return { output: result };
     },

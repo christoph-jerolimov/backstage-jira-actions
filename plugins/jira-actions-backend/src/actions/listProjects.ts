@@ -12,7 +12,7 @@ export function registerListProjectsAction(options: {
     name: 'list-projects',
     title: 'List Jira Projects',
     description:
-      'Lists the Jira projects visible to the configured credentials, with their keys, names, and IDs.',
+      'Lists the Jira projects visible to the configured credentials, with their keys, names, IDs, descriptions and URLs. Optionally filters by a project name.',
     attributes: {
       readOnly: true,
       destructive: false,
@@ -21,6 +21,12 @@ export function registerListProjectsAction(options: {
     schema: {
       input: z =>
         z.object({
+          name: z
+            .string()
+            .optional()
+            .describe(
+              'A case-insensitive filter matched against the project name or key',
+            ),
           maxResults: z
             .number()
             .int()
@@ -43,6 +49,11 @@ export function registerListProjectsAction(options: {
                 key: z.string().describe('The project key, e.g. "PROJ"'),
                 name: z.string().describe('The project display name'),
                 id: z.string().describe('The internal Jira project ID'),
+                description: z
+                  .string()
+                  .optional()
+                  .describe('The project description, if any'),
+                url: z.string().describe('A browseable URL of the project'),
               }),
             )
             .describe('The visible Jira projects'),
@@ -53,6 +64,7 @@ export function registerListProjectsAction(options: {
       const client = new JiraClient(connection);
       const projects = await client.listProjects({
         maxResults: input.maxResults ?? 50,
+        name: input.name,
       });
       return { output: { projects } };
     },

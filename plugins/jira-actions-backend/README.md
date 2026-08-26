@@ -7,16 +7,21 @@ so that they can be invoked through the actions service and — via
 
 ## Actions
 
-| Action ID                           | Description                                                                                     |
-| ----------------------------------- | ----------------------------------------------------------------------------------------------- |
-| `jira-actions:create-work-item`     | Creates a work item (issue) such as a Story, Bug or Task in a Jira project.                     |
-| `jira-actions:update-work-item`     | Modifies fields (summary, description, labels, assignee, issue type) of an existing Jira issue. |
-| `jira-actions:get-work-item`        | Reads a single issue by key, with the description rendered as Markdown (or text). Read-only.    |
-| `jira-actions:search-work-items`    | Searches issues by raw JQL or simplified filters. Read-only.                                    |
-| `jira-actions:add-comment`          | Adds a Markdown comment to an issue.                                                            |
-| `jira-actions:transition-work-item` | Moves an issue to a target status by name via the matching workflow transition.                 |
-| `jira-actions:list-projects`        | Lists the visible Jira projects. Read-only.                                                     |
-| `jira-actions:list-issue-types`     | Lists the issue types available in a project. Read-only.                                        |
+| Action ID                           | Description                                                                                      |
+| ----------------------------------- | ------------------------------------------------------------------------------------------------ |
+| `jira-actions:create-work-item`     | Creates a work item (issue) such as a Story, Bug or Task in a Jira project.                      |
+| `jira-actions:update-work-item`     | Modifies fields (summary, description, labels, assignee, issue type) of an existing Jira issue.  |
+| `jira-actions:rename-work-item`     | Changes only the summary (title) of an issue.                                                    |
+| `jira-actions:set-work-item-parent` | Changes only the parent of an issue, e.g. to move it under a different epic.                     |
+| `jira-actions:get-work-item`        | Reads a single issue by key, with the description rendered as Markdown (or text). Read-only.     |
+| `jira-actions:search-work-items`    | Searches issues by raw JQL or simplified filters. Read-only.                                     |
+| `jira-actions:add-comment`          | Adds a Markdown comment to an issue.                                                             |
+| `jira-actions:get-comments`         | Reads the comments of an issue, bodies rendered as Markdown by default. Read-only.               |
+| `jira-actions:add-label`            | Adds a single label to an issue without affecting its other labels.                              |
+| `jira-actions:remove-label`         | Removes a single label from an issue without affecting its other labels.                         |
+| `jira-actions:transition-work-item` | Moves an issue to a target status by name via the matching workflow transition.                  |
+| `jira-actions:list-projects`        | Lists the visible Jira projects with URLs and descriptions, optionally name-filtered. Read-only. |
+| `jira-actions:list-issue-types`     | Lists the issue types available in a project. Read-only.                                         |
 
 All actions accept an optional `host` input to select a specific Jira
 connection when more than one is configured; without it, the first configured
@@ -27,12 +32,21 @@ Usage notes:
 - `search-work-items` takes either a raw `jql` input or simplified filters
   (`projectKey`, `text`, `status`, `issueType`, `assignee`, `labels`) — not
   both. Filters are compiled to JQL ordered by most recently updated.
+- `update-work-item` edits labels either wholesale via `labels` (replacing
+  the full list) or incrementally via `addLabels`/`removeLabels` — the two
+  styles cannot be combined in one call. The dedicated `add-label` and
+  `remove-label` actions edit one label at a time and return the issue's
+  resulting labels; adding an existing or removing an absent label is a
+  no-op.
+- `list-projects` takes an optional `name` input, matched case-insensitively
+  against project names and keys.
 - `transition-work-item` matches the target status name (case-insensitively)
   against the issue's currently available transitions. If the issue already
   has the target status the action succeeds without changes; if the status is
   unreachable, the error lists the statuses that are reachable.
 - Descriptions and comment bodies carry a format selector
-  (`descriptionFormat` on create/update, `bodyFormat` on add-comment):
+  (`descriptionFormat` on create/update, `bodyFormat` on
+  add-comment/get-comments):
   `markdown` (default), `adf`, or `text`. With `markdown`, a supported
   subset — headings, bullet/ordered lists, fenced code blocks (with
   language), blockquotes, and inline bold/italic/code/links — is converted

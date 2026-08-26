@@ -521,7 +521,14 @@ describe('JiraClient', () => {
       });
 
       expect(maxResults).toBe('7');
-      expect(projects).toEqual([{ id: '10000', key: 'PROJ', name: 'Project' }]);
+      expect(projects).toEqual([
+        {
+          id: '10000',
+          key: 'PROJ',
+          name: 'Project',
+          url: 'https://example.atlassian.net/browse/PROJ',
+        },
+      ]);
     });
 
     it('lists projects via project on datacenter, truncated to maxResults', async () => {
@@ -540,8 +547,18 @@ describe('JiraClient', () => {
       });
 
       expect(projects).toEqual([
-        { id: '1', key: 'ONE', name: 'One' },
-        { id: '2', key: 'TWO', name: 'Two' },
+        {
+          id: '1',
+          key: 'ONE',
+          name: 'One',
+          url: 'https://jira.example.com/browse/ONE',
+        },
+        {
+          id: '2',
+          key: 'TWO',
+          name: 'Two',
+          url: 'https://jira.example.com/browse/TWO',
+        },
       ]);
     });
 
@@ -746,5 +763,230 @@ describe('JiraClient rich text formats', () => {
       descriptionFormat: 'adf',
     });
     expect(issue.description).toEqual(adfDoc);
+  });
+});
+
+describe('JiraClient management operations', () => {
+  const server = setupServer();
+  registerMswTestHooks(server);
+
+  describe('getComments', () => {
+    it('reads comments with authors on cloud', async () => {
+      let maxResults: string | null = null;
+      server.use(
+        http.get(
+          'https://example.atlassian.net/rest/api/3/issue/PROJ-1/comment',
+          ({ request }) => {
+            maxResults = new URL(request.url).searchParams.get('maxResults');
+            return HttpResponse.json({
+              comments: [
+                {
+                  id: 10,
+                  author: { displayName: 'Jane Doe' },
+                  body: {
+                    type: 'doc',
+                    version: 1,
+                    content: [
+                      {
+                        type: 'paragraph',
+                        content: [{ type: 'text', text: 'On it' }],
+                      },
+                    ],
+                  },
+                  created: '2026-08-01T10:00:00.000+0000',
+                  updated: '2026-08-02T10:00:00.000+0000',
+                },
+              ],
+            });
+          },
+        ),
+      );
+
+      const comments = await new JiraClient(cloudConnection).getComments(
+        'PROJ-1',
+        { maxResults: 25 },
+      );
+
+      expect(maxResults).toBe('25');
+      expect(comments).toHaveLength(1);
+      expect(comments[0].id).toBe('10');
+      expect(comments[0].author).toBe('Jane Doe');
+      expect(comments[0].created).toBe('2026-08-01T10:00:00.000+0000');
+    });
+
+    it('reads string bodies on datacenter and maps 404', async () => {
+      server.use(
+        http.get(
+          'https://jira.example.com/rest/api/2/issue/OPS-1/comment',
+          () =>
+            HttpResponse.json({
+              comments: [{ id: '5', body: 'plain comment' }],
+            }),
+        ),
+        http.get(
+          'https://jira.example.com/rest/api/2/issue/OPS-9/comment',
+          () =>
+            HttpResponse.json(
+              { errorMessages: ['Issue does not exist'] },
+              { status: 404 },
+            ),
+        ),
+      );
+
+      const client = new JiraClient(datacenterConnection);
+      const comments = await client.getComments('OPS-1', { maxResults: 50 });
+      expect(comments[0].body).toBe('plain comment');
+      expect(comments[0].author).toBeUndefined();
+
+      await expect(
+        client.getComments('OPS-9', { maxResults: 50 }),
+      ).rejects.toThrow(/get comments of Jira issue OPS-9, status 404/);
+    });
+  });
+
+  describe('labels and parent', () => {
+    it('edits labels incrementally and reads back the result', async () => {
+      let putBody: any;
+      server.use(
+        http.put(
+          'https://example.atlassian.net/rest/api/3/issue/PROJ-1',
+          async ({ request }) => {
+            putBody = await request.json();
+            return new HttpResponse(null, { status: 204 });
+          },
+        ),
+        http.get('https://example.atlassian.net/rest/api/3/issue/PROJ-1', () =>
+          HttpResponse.json({
+            key: 'PROJ-1',
+            fields: { labels: ['kept', 'added'] },
+          }),
+        ),
+      );
+
+      const labels = await new JiraClient(cloudConnection).editLabels(
+        'PROJ-1',
+        { add: ['added'], remove: ['dropped'] },
+      );
+
+      expect(putBody).toEqual({
+        update: { labels: [{ add: 'added' }, { remove: 'dropped' }] },
+      });
+      expect(labels).toEqual(['kept', 'added']);
+    });
+
+    it('combines field updates with label edits in a single request', async () => {
+      let putBody: any;
+      server.use(
+        http.put(
+          'https://example.atlassian.net/rest/api/3/issue/PROJ-1',
+          async ({ request }) => {
+            putBody = await request.json();
+            return new HttpResponse(null, { status: 204 });
+          },
+        ),
+      );
+
+      await new JiraClient(cloudConnection).updateIssue(
+        'PROJ-1',
+        { summary: 'New summary' },
+        { add: ['triage'] },
+      );
+
+      expect(putBody).toEqual({
+        fields: { summary: 'New summary' },
+        update: { labels: [{ add: 'triage' }] },
+      });
+    });
+
+    it('sets the parent of an issue', async () => {
+      let putBody: any;
+      server.use(
+        http.put(
+          'https://example.atlassian.net/rest/api/3/issue/PROJ-2',
+          async ({ request }) => {
+            putBody = await request.json();
+            return new HttpResponse(null, { status: 204 });
+          },
+        ),
+      );
+
+      await new JiraClient(cloudConnection).setParent('PROJ-2', 'PROJ-1');
+
+      expect(putBody).toEqual({ fields: { parent: { key: 'PROJ-1' } } });
+    });
+  });
+
+  describe('listProjects with filter and expansion', () => {
+    it('passes the query and expand on cloud and returns url/description', async () => {
+      let params: URLSearchParams | undefined;
+      server.use(
+        http.get(
+          'https://example.atlassian.net/rest/api/3/project/search',
+          ({ request }) => {
+            params = new URL(request.url).searchParams;
+            return HttpResponse.json({
+              values: [
+                { id: 1, key: 'PAY', name: 'Payments', description: 'Money' },
+                { id: 2, key: 'OPS', name: 'Operations' },
+              ],
+            });
+          },
+        ),
+      );
+
+      const projects = await new JiraClient(cloudConnection).listProjects({
+        maxResults: 10,
+        name: 'pay',
+      });
+
+      expect(params?.get('query')).toBe('pay');
+      expect(params?.get('expand')).toBe('description');
+      expect(projects).toEqual([
+        {
+          id: '1',
+          key: 'PAY',
+          name: 'Payments',
+          url: 'https://example.atlassian.net/browse/PAY',
+          description: 'Money',
+        },
+      ]);
+    });
+
+    it('filters client-side on datacenter', async () => {
+      server.use(
+        http.get(
+          'https://jira.example.com/rest/api/2/project',
+          ({ request }) => {
+            expect(new URL(request.url).searchParams.get('expand')).toBe(
+              'description',
+            );
+            return HttpResponse.json([
+              { id: '1', key: 'PAY', name: 'Payments' },
+              {
+                id: '2',
+                key: 'OPS',
+                name: 'Operations',
+                description: 'Run it',
+              },
+            ]);
+          },
+        ),
+      );
+
+      const projects = await new JiraClient(datacenterConnection).listProjects({
+        maxResults: 10,
+        name: 'oper',
+      });
+
+      expect(projects).toEqual([
+        {
+          id: '2',
+          key: 'OPS',
+          name: 'Operations',
+          url: 'https://jira.example.com/browse/OPS',
+          description: 'Run it',
+        },
+      ]);
+    });
   });
 });

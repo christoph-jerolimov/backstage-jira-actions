@@ -7,9 +7,14 @@ spec:
   targets:
     - ./create-work-item.yaml
     - ./update-work-item.yaml
+    - ./rename-work-item.yaml
+    - ./set-work-item-parent.yaml
     - ./get-work-item.yaml
     - ./search-work-items.yaml
     - ./add-comment.yaml
+    - ./get-comments.yaml
+    - ./add-label.yaml
+    - ./remove-label.yaml
     - ./transition-work-item.yaml
     - ./list-projects.yaml
     - ./list-issue-types.yaml

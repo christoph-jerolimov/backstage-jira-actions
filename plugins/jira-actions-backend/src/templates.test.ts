@@ -12,9 +12,14 @@ const TEMPLATES_DIR = resolve(
 const REQUIRED_INPUTS: Record<string, string[]> = {
   'create-work-item': ['issueType', 'summary'],
   'update-work-item': ['issueKey'],
+  'rename-work-item': ['issueKey', 'summary'],
+  'set-work-item-parent': ['issueKey', 'parentKey'],
   'get-work-item': ['issueKey'],
   'search-work-items': [],
   'add-comment': ['issueKey', 'body'],
+  'get-comments': ['issueKey'],
+  'add-label': ['issueKey', 'label'],
+  'remove-label': ['issueKey', 'label'],
   'transition-work-item': ['issueKey', 'status'],
   'list-projects': [],
   'list-issue-types': [],
@@ -33,15 +38,37 @@ const FORMAT_PARAMS: Record<string, string> = {
   'create-work-item': 'descriptionFormat',
   'update-work-item': 'descriptionFormat',
   'add-comment': 'bodyFormat',
+  'get-comments': 'bodyFormat',
   'get-work-item': 'descriptionFormat',
 };
 
-// List-returning read actions whose templates render a markdown list block
+// List-returning read actions whose templates render a markdown table
 // (over this output collection field) before the JSON dump.
-const LIST_OUTPUTS: Record<string, string> = {
-  'list-projects': 'projects',
-  'list-issue-types': 'issueTypes',
-  'search-work-items': 'items',
+const TABLE_OUTPUTS: Record<
+  string,
+  { collection: string; header: string; linkedKey: boolean }
+> = {
+  'list-projects': {
+    collection: 'projects',
+    header: '| Key | Name | Description |',
+    linkedKey: true,
+  },
+  'list-issue-types': {
+    collection: 'issueTypes',
+    header: '| Name | Description | Sub-task |',
+    linkedKey: false,
+  },
+  'search-work-items': {
+    collection: 'items',
+    header: '| Key | Summary | Status | Type | Assignee |',
+    linkedKey: true,
+  },
+};
+
+// Read actions whose templates render each result as a section instead of a
+// table row, before the JSON dump.
+const SECTION_OUTPUTS: Record<string, string> = {
+  'get-comments': 'comments',
 };
 
 const ACTION_NAMES = Object.keys(REQUIRED_INPUTS);
@@ -122,8 +149,10 @@ describe('jira actions test templates', () => {
       expect(formatProperty?.enum).toEqual(expected);
     });
 
-    it('renders list results as a markdown list plus a JSON dump', () => {
-      const collection = LIST_OUTPUTS[actionName];
+    it('renders list results as a markdown table or sections plus a JSON dump', () => {
+      const table = TABLE_OUTPUTS[actionName];
+      const sectionCollection = SECTION_OUTPUTS[actionName];
+      const collection = table?.collection ?? sectionCollection;
       const texts = template.spec.output?.text ?? [];
       expect(texts).toHaveLength(collection ? 2 : 1);
       const first = texts[0]?.content ?? '';
@@ -133,6 +162,17 @@ describe('jira actions test templates', () => {
         !collection || first.includes(`steps.invoke.output.${collection}`),
       ).toBe(true);
       expect(!collection || !first.includes('dump')).toBe(true);
+      expect(!table || first.includes(table.header)).toBe(true);
+      expect(!table || first.includes('| --- |')).toBe(true);
+      const linkedKeyCell = /\[\$\{\{ \w+\.key \}\}\]\(\$\{\{ \w+\.url \}\}\)/;
+      expect(!table?.linkedKey || linkedKeyCell.test(first)).toBe(true);
+      expect(
+        !sectionCollection ||
+          (first.includes('.author') &&
+            first.includes('.created') &&
+            first.includes('.body') &&
+            first.includes('---')),
+      ).toBe(true);
       expect(last).toContain('| dump(2)');
     });
 
@@ -146,8 +186,13 @@ describe('jira actions test templates', () => {
       const issueScoped = [
         'create-work-item',
         'update-work-item',
+        'rename-work-item',
+        'set-work-item-parent',
         'get-work-item',
         'add-comment',
+        'get-comments',
+        'add-label',
+        'remove-label',
         'transition-work-item',
       ];
       const links = template.spec.output?.links ?? [];

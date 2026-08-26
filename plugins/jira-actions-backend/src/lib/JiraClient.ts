@@ -58,6 +58,16 @@ export type JiraProject = {
   id: string;
   key: string;
   name: string;
+  url: string;
+  description?: string;
+};
+
+export type JiraComment = {
+  id: string;
+  author?: string;
+  body?: unknown;
+  created?: string;
+  updated?: string;
 };
 
 export type JiraIssueType = {
@@ -142,6 +152,7 @@ export class JiraClient {
   async updateIssue(
     issueKey: string,
     update: JiraWorkItemFields,
+    labelEdits?: { add?: string[]; remove?: string[] },
   ): Promise<{ key: string; url: string }> {
     const fields: JsonObject = { ...this.toOptionalFields(update) };
     if (update.summary !== undefined) {
@@ -151,7 +162,12 @@ export class JiraClient {
     const response = await this.request(
       'PUT',
       `/issue/${encodeURIComponent(issueKey)}`,
-      { body: { fields } },
+      {
+        body: {
+          fields,
+          ...(labelEdits ? { update: this.toLabelUpdate(labelEdits) } : {}),
+        },
+      },
     );
     if (!response.ok) {
       await this.throwForResponse(response, `update Jira issue ${issueKey}`);
@@ -186,7 +202,7 @@ export class JiraClient {
     const fields = issue.fields ?? {};
     return {
       ...this.toSearchItem(issue),
-      description: this.toReadDescription(
+      description: this.readRichText(
         fields.description,
         options?.descriptionFormat ?? 'markdown',
       ),
@@ -288,12 +304,103 @@ export class JiraClient {
     }
   }
 
-  async listProjects(options: { maxResults: number }): Promise<JiraProject[]> {
-    type RawProject = { id: string | number; key: string; name: string };
+  async getComments(
+    issueKey: string,
+    options: { maxResults: number },
+  ): Promise<JiraComment[]> {
+    const response = await this.request(
+      'GET',
+      `/issue/${encodeURIComponent(issueKey)}/comment`,
+      { query: { maxResults: String(options.maxResults) } },
+    );
+    if (!response.ok) {
+      await this.throwForResponse(
+        response,
+        `get comments of Jira issue ${issueKey}`,
+      );
+    }
+    const body = (await response.json()) as {
+      comments?: Array<{
+        id: string | number;
+        author?: { displayName?: string } | null;
+        body?: unknown;
+        created?: string;
+        updated?: string;
+      }>;
+    };
+    return (body.comments ?? []).map(comment => ({
+      id: String(comment.id),
+      author: comment.author?.displayName || undefined,
+      body: comment.body,
+      created: comment.created,
+      updated: comment.updated,
+    }));
+  }
+
+  /**
+   * Adds and/or removes labels incrementally via Jira's update section,
+   * never replacing the full list, and returns the resulting labels.
+   */
+  async editLabels(
+    issueKey: string,
+    edits: { add?: string[]; remove?: string[] },
+  ): Promise<string[]> {
+    const response = await this.request(
+      'PUT',
+      `/issue/${encodeURIComponent(issueKey)}`,
+      { body: { update: this.toLabelUpdate(edits) } },
+    );
+    if (!response.ok) {
+      await this.throwForResponse(
+        response,
+        `edit labels of Jira issue ${issueKey}`,
+      );
+    }
+
+    const readBack = await this.request(
+      'GET',
+      `/issue/${encodeURIComponent(issueKey)}`,
+      { query: { fields: 'labels' } },
+    );
+    if (!readBack.ok) {
+      await this.throwForResponse(readBack, `get Jira issue ${issueKey}`);
+    }
+    const issue = (await readBack.json()) as RawIssue;
+    return issue.fields?.labels ?? [];
+  }
+
+  async setParent(issueKey: string, parentKey: string): Promise<void> {
+    const response = await this.request(
+      'PUT',
+      `/issue/${encodeURIComponent(issueKey)}`,
+      { body: { fields: { parent: { key: parentKey } } } },
+    );
+    if (!response.ok) {
+      await this.throwForResponse(
+        response,
+        `set parent of Jira issue ${issueKey}`,
+      );
+    }
+  }
+
+  async listProjects(options: {
+    maxResults: number;
+    name?: string;
+  }): Promise<JiraProject[]> {
+    type RawProject = {
+      id: string | number;
+      key: string;
+      name: string;
+      description?: string;
+    };
     let projects: RawProject[];
     if (this.isCloud) {
       const response = await this.request('GET', '/project/search', {
-        query: { maxResults: String(options.maxResults) },
+        query: {
+          maxResults: String(options.maxResults),
+          expand: 'description',
+          ...(options.name ? { query: options.name } : {}),
+        },
       });
       if (!response.ok) {
         await this.throwForResponse(response, 'list Jira projects');
@@ -301,16 +408,30 @@ export class JiraClient {
       const body = (await response.json()) as { values?: RawProject[] };
       projects = body.values ?? [];
     } else {
-      const response = await this.request('GET', '/project');
+      const response = await this.request('GET', '/project', {
+        query: { expand: 'description' },
+      });
       if (!response.ok) {
         await this.throwForResponse(response, 'list Jira projects');
       }
       projects = (await response.json()) as RawProject[];
     }
+    // Uniform name/key filtering on both products; on Cloud the server-side
+    // query only pre-narrows the result.
+    const filter = options.name?.toLocaleLowerCase('en-US');
+    if (filter) {
+      projects = projects.filter(
+        project =>
+          project.name.toLocaleLowerCase('en-US').includes(filter) ||
+          project.key.toLocaleLowerCase('en-US').includes(filter),
+      );
+    }
     return projects.slice(0, options.maxResults).map(project => ({
       id: String(project.id),
       key: project.key,
       name: project.name,
+      url: this.browseUrl(project.key),
+      description: project.description || undefined,
     }));
   }
 
@@ -338,7 +459,11 @@ export class JiraClient {
     }));
   }
 
-  private toReadDescription(
+  /**
+   * Renders a rich-text value read from Jira (a description or comment
+   * body) in the requested format.
+   */
+  readRichText(
     description: unknown,
     format: RichTextFormat,
   ): string | JsonObject | undefined {
@@ -353,6 +478,18 @@ export class JiraClient {
     return format === 'text'
       ? adfToText(description)
       : adfToMarkdown(description);
+  }
+
+  private toLabelUpdate(edits: {
+    add?: string[];
+    remove?: string[];
+  }): JsonObject {
+    return {
+      labels: [
+        ...(edits.add ?? []).map(label => ({ add: label })),
+        ...(edits.remove ?? []).map(label => ({ remove: label })),
+      ],
+    };
   }
 
   private toSearchItem(issue: RawIssue): JiraSearchItem {

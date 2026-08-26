@@ -75,7 +75,9 @@ spec:
     text:
       - title: 'Work items'
         content: |
-          {% for i in steps.invoke.output.items %}- [${{ i.key }}](${{ i.url }}) — ${{ i.summary }} (${{ i.status }})
+          | Key | Summary | Status | Type | Assignee |
+          | --- | --- | --- | --- | --- |
+          {% for i in steps.invoke.output.items %}| [${{ i.key }}](${{ i.url }}) | ${{ i.summary }} | ${{ i.status }} | ${{ i.issueType }} | ${{ i.assignee }} |
           {% endfor %}
       - title: 'JSON'
         content: |

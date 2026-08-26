@@ -1,0 +1,48 @@
+apiVersion: scaffolder.backstage.io/v1beta3
+kind: Template
+metadata:
+  name: 'jira-test-set-work-item-parent'
+  title: 'Jira Test: Set Work Item Parent'
+  description: 'Changes only the parent of a Jira work item via the jira-actions:set-work-item-parent action.'
+  tags:
+    - jira
+    - test
+spec:
+  owner: user:guest
+  type: jira-test
+  parameters:
+    - title: Set work item parent
+      required:
+        - issueKey
+        - parentKey
+      properties:
+        issueKey:
+          title: 'Issue key'
+          type: string
+          description: 'The key of the issue to re-parent, e.g. PROJ-123'
+        parentKey:
+          title: 'Parent key'
+          type: string
+          description: 'The key of the new parent issue, e.g. PROJ-1'
+        host:
+          title: 'Jira host'
+          type: string
+          description: 'Only needed when multiple Jira connections are configured'
+  steps:
+    - id: invoke
+      name: 'Set work item parent'
+      action: jira-actions:set-work-item-parent
+      input:
+        issueKey: ${{ parameters.issueKey }}
+        parentKey: ${{ parameters.parentKey }}
+        host: ${{ parameters.host }}
+  output:
+    links:
+      - title: Open issue
+        url: ${{ steps.invoke.output.url }}
+    text:
+      - title: Result
+        content: |
+          ```json
+          ${{ steps.invoke.output | dump(2) }}
+          ```

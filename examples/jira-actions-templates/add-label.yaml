@@ -1,0 +1,48 @@
+apiVersion: scaffolder.backstage.io/v1beta3
+kind: Template
+metadata:
+  name: 'jira-test-add-label'
+  title: 'Jira Test: Add Label'
+  description: 'Adds a single label to a Jira work item via the jira-actions:add-label action.'
+  tags:
+    - jira
+    - test
+spec:
+  owner: user:guest
+  type: jira-test
+  parameters:
+    - title: Add label
+      required:
+        - issueKey
+        - label
+      properties:
+        issueKey:
+          title: 'Issue key'
+          type: string
+          description: 'The key of the issue, e.g. PROJ-123'
+        label:
+          title: 'Label'
+          type: string
+          description: 'The label to add'
+        host:
+          title: 'Jira host'
+          type: string
+          description: 'Only needed when multiple Jira connections are configured'
+  steps:
+    - id: invoke
+      name: 'Add label'
+      action: jira-actions:add-label
+      input:
+        issueKey: ${{ parameters.issueKey }}
+        label: ${{ parameters.label }}
+        host: ${{ parameters.host }}
+  output:
+    links:
+      - title: Open issue
+        url: ${{ steps.invoke.output.url }}
+    text:
+      - title: Result
+        content: |
+          ```json
+          ${{ steps.invoke.output | dump(2) }}
+          ```

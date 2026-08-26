@@ -6,10 +6,17 @@ import { actionsRegistryServiceRef } from '@backstage/backend-plugin-api/alpha';
 import { catalogServiceRef } from '@backstage/plugin-catalog-node';
 import { registerAddCommentAction } from './actions/addComment';
 import { registerCreateWorkItemAction } from './actions/createWorkItem';
+import { registerGetCommentsAction } from './actions/getComments';
 import { registerGetWorkItemAction } from './actions/getWorkItem';
+import {
+  registerAddLabelAction,
+  registerRemoveLabelAction,
+} from './actions/labels';
 import { registerListIssueTypesAction } from './actions/listIssueTypes';
 import { registerListProjectsAction } from './actions/listProjects';
+import { registerRenameWorkItemAction } from './actions/renameWorkItem';
 import { registerSearchWorkItemsAction } from './actions/searchWorkItems';
+import { registerSetWorkItemParentAction } from './actions/setWorkItemParent';
 import { registerTransitionWorkItemAction } from './actions/transitionWorkItem';
 import { registerUpdateWorkItemAction } from './actions/updateWorkItem';
 import { JiraConnectionsReader } from './lib/connections';
@@ -33,7 +40,12 @@ export const jiraActionsPlugin = createBackendPlugin({
         const connections = JiraConnectionsReader.fromConfig(config);
         registerCreateWorkItemAction({ actionsRegistry, connections, catalog });
         registerUpdateWorkItemAction({ actionsRegistry, connections });
+        registerRenameWorkItemAction({ actionsRegistry, connections });
+        registerSetWorkItemParentAction({ actionsRegistry, connections });
+        registerAddLabelAction({ actionsRegistry, connections });
+        registerRemoveLabelAction({ actionsRegistry, connections });
         registerGetWorkItemAction({ actionsRegistry, connections });
+        registerGetCommentsAction({ actionsRegistry, connections });
         registerSearchWorkItemsAction({
           actionsRegistry,
           connections,

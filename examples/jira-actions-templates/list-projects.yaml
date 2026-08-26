@@ -3,7 +3,7 @@ kind: Template
 metadata:
   name: 'jira-test-list-projects'
   title: 'Jira Test: List Projects'
-  description: 'Lists the visible Jira projects via the jira-actions:list-projects action.'
+  description: 'Lists the visible Jira projects, optionally filtered by name, via the jira-actions:list-projects action.'
   tags:
     - jira
     - test
@@ -13,6 +13,10 @@ spec:
   parameters:
     - title: List projects
       properties:
+        name:
+          title: 'Name filter'
+          type: string
+          description: 'A case-insensitive filter matched against the project name or key'
         maxResults:
           title: 'Maximum results'
           type: number
@@ -26,13 +30,16 @@ spec:
       name: 'List projects'
       action: jira-actions:list-projects
       input:
+        name: ${{ parameters.name }}
         maxResults: ${{ parameters.maxResults }}
         host: ${{ parameters.host }}
   output:
     text:
       - title: 'Projects'
         content: |
-          {% for p in steps.invoke.output.projects %}- **${{ p.key }}** — ${{ p.name }} (id ${{ p.id }})
+          | Key | Name | Description |
+          | --- | --- | --- |
+          {% for p in steps.invoke.output.projects %}| [${{ p.key }}](${{ p.url }}) | ${{ p.name }} | ${{ p.description }} |
           {% endfor %}
       - title: 'JSON'
         content: |

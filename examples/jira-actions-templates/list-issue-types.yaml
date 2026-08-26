@@ -38,7 +38,9 @@ spec:
     text:
       - title: 'Issue types'
         content: |
-          {% for t in steps.invoke.output.issueTypes %}- **${{ t.name }}**{% if t.subtask %} (sub-task){% endif %}{% if t.description %} — ${{ t.description }}{% endif %}
+          | Name | Description | Sub-task |
+          | --- | --- | --- |
+          {% for t in steps.invoke.output.issueTypes %}| ${{ t.name }} | ${{ t.description }} | ${{ 'yes' if t.subtask else 'no' }} |
           {% endfor %}
       - title: 'JSON'
         content: |
