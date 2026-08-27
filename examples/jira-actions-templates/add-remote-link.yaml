@@ -29,6 +29,10 @@ spec:
           title: 'Title'
           type: string
           description: 'The link text shown in Jira'
+        globalId:
+          title: 'Global ID'
+          type: string
+          description: 'A stable identifier; re-running with the same ID updates the link instead of duplicating it'
         host:
           title: 'Jira host'
           type: string
@@ -41,6 +45,7 @@ spec:
         issueKey: ${{ parameters.issueKey }}
         url: ${{ parameters.url }}
         title: ${{ parameters.title }}
+        globalId: ${{ parameters.globalId }}
         host: ${{ parameters.host }}
   output:
     links:

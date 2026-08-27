@@ -1,0 +1,48 @@
+apiVersion: scaffolder.backstage.io/v1beta3
+kind: Template
+metadata:
+  name: 'jira-test-get-attachments'
+  title: 'Jira Test: Get Attachments'
+  description: 'Reads the attachments of a Jira work item via the jira-actions:get-attachments action.'
+  tags:
+    - jira
+    - test
+spec:
+  owner: user:guest
+  type: jira-test
+  parameters:
+    - title: Get attachments
+      required:
+        - issueKey
+      properties:
+        issueKey:
+          title: 'Issue key'
+          type: string
+          description: 'The key of the issue, e.g. PROJ-123'
+        host:
+          title: 'Jira host'
+          type: string
+          description: 'Only needed when multiple Jira connections are configured'
+  steps:
+    - id: invoke
+      name: 'Get attachments'
+      action: jira-actions:get-attachments
+      input:
+        issueKey: ${{ parameters.issueKey }}
+        host: ${{ parameters.host }}
+  output:
+    links:
+      - title: Open issue
+        url: ${{ steps.invoke.output.url }}
+    text:
+      - title: 'Attachments'
+        content: |
+          | Filename | Size | Type | Author |
+          | --- | --- | --- | --- |
+          {% for a in steps.invoke.output.attachments %}| [${{ a.filename }}](${{ a.downloadUrl }}) | ${{ a.size }} | ${{ a.mimeType }} | ${{ a.author }} |
+          {% endfor %}
+      - title: 'JSON'
+        content: |
+          ```json
+          ${{ steps.invoke.output | dump(2) }}
+          ```

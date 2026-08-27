@@ -43,6 +43,12 @@ export function registerAddRemoteLinkAction(options: {
             .describe('The key of the issue, e.g. "PROJ-123"'),
           url: z.string().describe('The link target URL'),
           title: z.string().describe('The link text shown in Jira'),
+          globalId: z
+            .string()
+            .optional()
+            .describe(
+              'A caller-chosen stable identifier; re-running with the same globalId updates the existing link instead of creating a duplicate',
+            ),
           host: z
             .string()
             .optional()
@@ -70,6 +76,7 @@ export function registerAddRemoteLinkAction(options: {
       const { remoteLinkId } = await client.addRemoteLink(input.issueKey, {
         url: input.url,
         title: input.title,
+        globalId: input.globalId,
       });
       logger.info(
         `Added remote link "${input.title}" to Jira issue ${input.issueKey}`,
@@ -132,6 +139,10 @@ export function registerGetRemoteLinksAction(options: {
                 id: z.string().describe('The remote link ID'),
                 title: z.string().describe('The link title'),
                 url: z.string().describe('The link target URL'),
+                globalId: z
+                  .string()
+                  .optional()
+                  .describe('The stable identifier, when the link has one'),
               }),
             )
             .describe("The issue's remote links"),
