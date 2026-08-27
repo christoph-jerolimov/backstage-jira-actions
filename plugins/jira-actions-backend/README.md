@@ -13,7 +13,7 @@ so that they can be invoked through the actions service and — via
 | `jira-actions:update-work-item`       | Modifies fields (summary, description, labels, assignee, issue type) of an existing Jira issue.  |
 | `jira-actions:rename-work-item`       | Changes only the summary (title) of an issue.                                                    |
 | `jira-actions:set-work-item-parent`   | Changes only the parent of an issue, e.g. to move it under a different epic.                     |
-| `jira-actions:delete-work-item`       | Permanently deletes an issue. The only action marked destructive.                                |
+| `jira-actions:delete-work-item`       | Permanently deletes an issue. Destructive.                                                       |
 | `jira-actions:get-work-item`          | Reads a single issue by key, including its links and selected custom fields. Read-only.          |
 | `jira-actions:search-work-items`      | Searches issues by raw JQL or simplified filters, with page cursors. Read-only.                  |
 | `jira-actions:search-users`           | Finds users and returns the identity value usable as assignee or watcher. Read-only.             |
@@ -23,7 +23,7 @@ so that they can be invoked through the actions service and — via
 | `jira-actions:delete-comment`         | Permanently deletes a comment. Destructive.                                                      |
 | `jira-actions:add-label`              | Adds a single label to an issue without affecting its other labels.                              |
 | `jira-actions:remove-label`           | Removes a single label from an issue without affecting its other labels.                         |
-| `jira-actions:add-remote-link`        | Attaches a titled web link (e.g. a PR or Backstage entity page) to an issue.                     |
+| `jira-actions:add-remote-link`        | Attaches a titled web link to an issue; a globalId makes re-runs update instead of duplicate.    |
 | `jira-actions:get-remote-links`       | Reads the web links attached to an issue. Read-only.                                             |
 | `jira-actions:link-work-items`        | Links two issues with a relation such as "blocks" or "duplicates".                               |
 | `jira-actions:list-link-types`        | Lists the available issue link types with their relation descriptions. Read-only.                |
@@ -58,8 +58,8 @@ Usage notes:
 - `search-work-items` takes either a raw `jql` input or simplified filters
   (`projectKey`, `text`, `status`, `issueType`, `assignee`, `labels`) — not
   both. Filters are compiled to JQL ordered by most recently updated.
-- `search-work-items`, `get-comments`, and `list-sprint-work-items` page
-  with an opaque cursor: pass a
+- `search-work-items`, `get-comments`, `list-sprint-work-items`, and
+  `list-backlog-work-items` page with an opaque cursor: pass a
   previous run's `nextPageToken` output as the `pageToken` input to fetch
   the next page; the token is absent once no further results remain.
 - `fixVersions`, `affectsVersions`, and `components` on create/update take

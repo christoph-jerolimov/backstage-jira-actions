@@ -8,6 +8,7 @@ import { registerAddCommentAction } from './actions/addComment';
 import {
   registerCompleteSprintAction,
   registerCreateSprintAction,
+  registerListBacklogWorkItemsAction,
   registerListBoardsAction,
   registerListSprintsAction,
   registerListSprintWorkItemsAction,
@@ -22,6 +23,7 @@ import {
 } from './actions/commentEditing';
 import { registerCreateWorkItemAction } from './actions/createWorkItem';
 import { registerCreateWorkItemsAction } from './actions/createWorkItems';
+import { registerGetAttachmentsAction } from './actions/attachments';
 import { registerDeleteWorkItemAction } from './actions/deleteWorkItem';
 import { registerGetCommentsAction } from './actions/getComments';
 import { registerGetWorkItemAction } from './actions/getWorkItem';
@@ -105,6 +107,7 @@ export const jiraActionsPlugin = createBackendPlugin({
         registerRemoveLabelAction(common);
         registerGetWorkItemAction(common);
         registerGetCommentsAction(common);
+        registerGetAttachmentsAction(common);
         registerSearchWorkItemsAction({ ...common, catalog });
         registerSearchUsersAction(common);
         registerAddCommentAction(common);
@@ -133,6 +136,7 @@ export const jiraActionsPlugin = createBackendPlugin({
         registerStartSprintAction(common);
         registerCompleteSprintAction(common);
         registerListSprintWorkItemsAction(common);
+        registerListBacklogWorkItemsAction(common);
         registerGetSprintInsightsAction(common);
         registerMoveToSprintAction(common);
         registerMoveToBacklogAction(common);

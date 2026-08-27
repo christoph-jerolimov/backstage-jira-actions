@@ -13,6 +13,7 @@ import { registerAddCommentAction } from './addComment';
 import {
   registerCompleteSprintAction,
   registerCreateSprintAction,
+  registerListBacklogWorkItemsAction,
   registerListBoardsAction,
   registerListSprintsAction,
   registerListSprintWorkItemsAction,
@@ -27,6 +28,7 @@ import {
 } from './commentEditing';
 import { registerCreateWorkItemAction } from './createWorkItem';
 import { registerCreateWorkItemsAction } from './createWorkItems';
+import { registerGetAttachmentsAction } from './attachments';
 import { registerDeleteWorkItemAction } from './deleteWorkItem';
 import { registerGetCommentsAction } from './getComments';
 import { registerGetWorkItemAction } from './getWorkItem';
@@ -142,6 +144,8 @@ function makeRegistry(
   });
   const common = { actionsRegistry, connections: reader, permissions };
   registerCreateWorkItemsAction({ ...common, catalog });
+  registerGetAttachmentsAction(common);
+  registerListBacklogWorkItemsAction(common);
   registerUpdateCommentAction(common);
   registerDeleteCommentAction(common);
   registerAddRemoteLinkAction(common);
@@ -3276,6 +3280,210 @@ describe('jira work item actions', () => {
     });
   });
 
+  describe('attachments and backlog', () => {
+    it('reads the attachments of an issue', async () => {
+      let params: URLSearchParams | undefined;
+      server.use(
+        http.get(
+          'https://example.atlassian.net/rest/api/3/issue/PROJ-1',
+          ({ request }) => {
+            params = new URL(request.url).searchParams;
+            return HttpResponse.json({
+              key: 'PROJ-1',
+              fields: {
+                attachment: [
+                  {
+                    id: 10000,
+                    filename: 'crash.log',
+                    size: 2048,
+                    mimeType: 'text/plain',
+                    content:
+                      'https://example.atlassian.net/rest/api/3/attachment/content/10000',
+                    author: { displayName: 'Jane Doe' },
+                    created: '2026-08-01T10:00:00.000+0000',
+                  },
+                ],
+              },
+            });
+          },
+        ),
+      );
+
+      const result = await makeRegistry([cloudConnection]).invoke({
+        id: 'test:get-attachments',
+        input: { issueKey: 'PROJ-1' },
+      });
+
+      expect(params?.get('fields')).toBe('attachment');
+      expect(result).toEqual({
+        output: {
+          key: 'PROJ-1',
+          url: 'https://example.atlassian.net/browse/PROJ-1',
+          attachments: [
+            {
+              id: '10000',
+              filename: 'crash.log',
+              size: 2048,
+              mimeType: 'text/plain',
+              downloadUrl:
+                'https://example.atlassian.net/rest/api/3/attachment/content/10000',
+              author: 'Jane Doe',
+              created: '2026-08-01T10:00:00.000+0000',
+            },
+          ],
+        },
+      });
+    });
+
+    it('returns an empty array for an issue without attachments', async () => {
+      server.use(
+        http.get('https://example.atlassian.net/rest/api/3/issue/PROJ-1', () =>
+          HttpResponse.json({ key: 'PROJ-1', fields: {} }),
+        ),
+      );
+
+      const result: any = await makeRegistry([cloudConnection]).invoke({
+        id: 'test:get-attachments',
+        input: { issueKey: 'PROJ-1' },
+      });
+
+      expect(result.output.attachments).toEqual([]);
+    });
+
+    it('fails with NotFound for an unknown issue', async () => {
+      server.use(
+        http.get(
+          'https://example.atlassian.net/rest/api/3/issue/PROJ-999',
+          () =>
+            HttpResponse.json(
+              { errorMessages: ['Issue does not exist'] },
+              { status: 404 },
+            ),
+        ),
+      );
+
+      await expect(
+        makeRegistry([cloudConnection]).invoke({
+          id: 'test:get-attachments',
+          input: { issueKey: 'PROJ-999' },
+        }),
+      ).rejects.toThrow(/status 404.*Issue does not exist/);
+    });
+
+    it('upserts a remote link with a globalId', async () => {
+      let received: any;
+      server.use(
+        http.post(
+          'https://example.atlassian.net/rest/api/3/issue/PROJ-1/remotelink',
+          async ({ request }) => {
+            received = await request.json();
+            return HttpResponse.json({ id: 10000 }, { status: 201 });
+          },
+        ),
+      );
+
+      await makeRegistry([cloudConnection]).invoke({
+        id: 'test:add-remote-link',
+        input: {
+          issueKey: 'PROJ-1',
+          url: 'https://pr.example.com/42',
+          title: 'PR #42',
+          globalId: 'backstage:pr-42',
+        },
+      });
+
+      expect(received).toEqual({
+        globalId: 'backstage:pr-42',
+        object: { url: 'https://pr.example.com/42', title: 'PR #42' },
+      });
+    });
+
+    it('returns globalIds on get-remote-links', async () => {
+      server.use(
+        http.get(
+          'https://example.atlassian.net/rest/api/3/issue/PROJ-1/remotelink',
+          () =>
+            HttpResponse.json([
+              {
+                id: 10000,
+                globalId: 'backstage:pr-42',
+                object: { url: 'https://pr.example.com/42', title: 'PR #42' },
+              },
+            ]),
+        ),
+      );
+
+      const result: any = await makeRegistry([cloudConnection]).invoke({
+        id: 'test:get-remote-links',
+        input: { issueKey: 'PROJ-1' },
+      });
+
+      expect(result.output.remoteLinks[0].globalId).toBe('backstage:pr-42');
+    });
+
+    it('lists the backlog of a board with paging', async () => {
+      let params: URLSearchParams | undefined;
+      server.use(
+        http.get(
+          'https://example.atlassian.net/rest/agile/1.0/board/7/backlog',
+          ({ request }) => {
+            params = new URL(request.url).searchParams;
+            return HttpResponse.json({
+              issues: [
+                {
+                  key: 'PROJ-9',
+                  fields: {
+                    summary: 'Backlog item',
+                    status: { name: 'To Do' },
+                    issuetype: { name: 'Story' },
+                  },
+                },
+              ],
+              total: 2,
+            });
+          },
+        ),
+      );
+
+      const result: any = await makeRegistry([cloudConnection]).invoke({
+        id: 'test:list-backlog-work-items',
+        input: { boardId: '7', maxResults: 1 },
+      });
+
+      expect(params?.get('startAt')).toBe('0');
+      expect(result.output.items).toEqual([
+        {
+          key: 'PROJ-9',
+          summary: 'Backlog item',
+          status: 'To Do',
+          issueType: 'Story',
+          url: 'https://example.atlassian.net/browse/PROJ-9',
+        },
+      ]);
+      expect(result.output.nextPageToken).toBe('1');
+    });
+
+    it('fails with NotFound for an unknown board', async () => {
+      server.use(
+        http.get(
+          'https://example.atlassian.net/rest/agile/1.0/board/99/backlog',
+          () =>
+            HttpResponse.json(
+              { errorMessages: ['Board does not exist'] },
+              { status: 404 },
+            ),
+        ),
+      );
+
+      await expect(
+        makeRegistry([cloudConnection]).invoke({
+          id: 'test:list-backlog-work-items',
+          input: { boardId: '99' },
+        }),
+      ).rejects.toThrow(/board 99.*status 404/);
+    });
+  });
+
   describe('permission gating', () => {
     it('rejects a denied caller before any Jira call', async () => {
       let called = false;
@@ -3320,7 +3528,7 @@ describe('jira work item actions', () => {
     });
   });
 
-  it('lists all forty-one actions with schemas and attributes', async () => {
+  it('lists all forty-three actions with schemas and attributes', async () => {
     const { actions } = await makeRegistry([cloudConnection]).list();
     const ids = actions.map(a => a.id).sort();
     expect(ids).toEqual([
@@ -3336,12 +3544,14 @@ describe('jira work item actions', () => {
       'test:create-work-items',
       'test:delete-comment',
       'test:delete-work-item',
+      'test:get-attachments',
       'test:get-comments',
       'test:get-remote-links',
       'test:get-sprint-insights',
       'test:get-work-item',
       'test:get-worklogs',
       'test:link-work-items',
+      'test:list-backlog-work-items',
       'test:list-boards',
       'test:list-components',
       'test:list-fields',
@@ -3371,11 +3581,13 @@ describe('jira work item actions', () => {
       .map(a => a.id)
       .sort();
     expect(readOnlyActions).toEqual([
+      'test:get-attachments',
       'test:get-comments',
       'test:get-remote-links',
       'test:get-sprint-insights',
       'test:get-work-item',
       'test:get-worklogs',
+      'test:list-backlog-work-items',
       'test:list-boards',
       'test:list-components',
       'test:list-fields',

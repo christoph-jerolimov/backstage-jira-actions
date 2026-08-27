@@ -16,6 +16,7 @@ spec:
     - ./search-users.yaml
     - ./add-comment.yaml
     - ./get-comments.yaml
+    - ./get-attachments.yaml
     - ./update-comment.yaml
     - ./delete-comment.yaml
     - ./add-label.yaml
@@ -39,6 +40,7 @@ spec:
     - ./list-boards.yaml
     - ./list-sprints.yaml
     - ./list-sprint-work-items.yaml
+    - ./list-backlog-work-items.yaml
     - ./get-sprint-insights.yaml
     - ./create-sprint.yaml
     - ./update-sprint.yaml

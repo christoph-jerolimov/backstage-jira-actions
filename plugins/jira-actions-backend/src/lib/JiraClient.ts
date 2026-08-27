@@ -131,6 +131,17 @@ export type JiraRemoteLink = {
   id: string;
   title: string;
   url: string;
+  globalId?: string;
+};
+
+export type JiraAttachment = {
+  id: string;
+  filename: string;
+  downloadUrl: string;
+  size?: number;
+  mimeType?: string;
+  author?: string;
+  created?: string;
 };
 
 export type JiraSearchItem = {
@@ -857,12 +868,19 @@ export class JiraClient {
 
   async addRemoteLink(
     issueKey: string,
-    link: { url: string; title: string },
+    link: { url: string; title: string; globalId?: string },
   ): Promise<{ remoteLinkId: string }> {
+    // With a globalId, Jira upserts: re-posting the same id updates the
+    // existing link instead of creating a duplicate.
     const response = await this.request(
       'POST',
       `/issue/${encodeURIComponent(issueKey)}/remotelink`,
-      { body: { object: { url: link.url, title: link.title } } },
+      {
+        body: {
+          ...(link.globalId !== undefined ? { globalId: link.globalId } : {}),
+          object: { url: link.url, title: link.title },
+        },
+      },
     );
     if (!response.ok) {
       await this.throwForResponse(
@@ -887,12 +905,50 @@ export class JiraClient {
     }
     const body = (await response.json()) as Array<{
       id: string | number;
+      globalId?: string;
       object?: { url?: string; title?: string };
     }>;
     return body.map(link => ({
       id: String(link.id),
       title: link.object?.title ?? '',
       url: link.object?.url ?? '',
+      globalId: link.globalId || undefined,
+    }));
+  }
+
+  async getAttachments(issueKey: string): Promise<JiraAttachment[]> {
+    const response = await this.request(
+      'GET',
+      `/issue/${encodeURIComponent(issueKey)}`,
+      { query: { fields: 'attachment' } },
+    );
+    if (!response.ok) {
+      await this.throwForResponse(
+        response,
+        `get attachments of Jira issue ${issueKey}`,
+      );
+    }
+    const issue = (await response.json()) as {
+      fields?: {
+        attachment?: Array<{
+          id: string | number;
+          filename?: string;
+          size?: number;
+          mimeType?: string;
+          content?: string;
+          author?: { displayName?: string } | null;
+          created?: string;
+        }>;
+      };
+    };
+    return (issue.fields?.attachment ?? []).map(attachment => ({
+      id: String(attachment.id),
+      filename: attachment.filename ?? '',
+      downloadUrl: attachment.content ?? '',
+      size: attachment.size,
+      mimeType: attachment.mimeType,
+      author: attachment.author?.displayName || undefined,
+      created: attachment.created,
     }));
   }
 
@@ -1345,6 +1401,44 @@ export class JiraClient {
       await this.throwForResponse(
         response,
         `list issues of Jira sprint ${sprintId}`,
+      );
+    }
+    const body = (await response.json()) as {
+      issues?: RawIssue[];
+      total?: number;
+    };
+    const issues = body.issues ?? [];
+    return {
+      items: issues.map(issue => ({
+        ...this.toSearchItem(issue),
+        statusCategory: issue.fields?.status?.statusCategory?.key,
+        assigneeName: issue.fields?.assignee?.displayName || undefined,
+      })),
+      nextPageToken: this.nextOffsetToken(startAt, issues.length, body.total),
+    };
+  }
+
+  async listBacklogIssues(
+    boardId: string,
+    options: { maxResults: number; pageToken?: string },
+  ): Promise<{ items: JiraSprintIssue[]; nextPageToken?: string }> {
+    const startAt = this.parseOffsetToken(options.pageToken);
+    const response = await this.request(
+      'GET',
+      `/board/${encodeURIComponent(boardId)}/backlog`,
+      {
+        api: 'agile',
+        query: {
+          maxResults: String(options.maxResults),
+          startAt: String(startAt),
+          fields: SEARCH_FIELDS.join(','),
+        },
+      },
+    );
+    if (!response.ok) {
+      await this.throwForResponse(
+        response,
+        `list backlog of Jira board ${boardId}`,
       );
     }
     const body = (await response.json()) as {

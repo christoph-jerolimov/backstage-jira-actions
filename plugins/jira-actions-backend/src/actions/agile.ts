@@ -707,3 +707,98 @@ export function registerCompleteSprintAction(options: {
     },
   });
 }
+
+export function registerListBacklogWorkItemsAction(options: {
+  actionsRegistry: ActionsRegistryService;
+  connections: JiraConnectionsReader;
+  permissions: PermissionsService;
+}) {
+  const { actionsRegistry, connections, permissions } = options;
+
+  actionsRegistry.register({
+    name: 'list-backlog-work-items',
+    title: 'List Jira Backlog Work Items',
+    description:
+      'Lists the backlog work items (issues) of an agile board, with the same item shape as list-sprint-work-items.',
+    attributes: {
+      readOnly: true,
+      destructive: false,
+      idempotent: true,
+    },
+    examples: [
+      {
+        title: 'See what is in the backlog',
+        input: {
+          boardId: '7',
+        },
+      },
+    ],
+    schema: {
+      input: z =>
+        z.object({
+          boardId: z
+            .string()
+            .describe('The ID of the board, as returned by list-boards'),
+          maxResults: z
+            .number()
+            .int()
+            .min(1)
+            .max(100)
+            .optional()
+            .describe('Maximum number of items to return, default 50'),
+          pageToken: z
+            .string()
+            .optional()
+            .describe(
+              'An opaque cursor from a previous invocation to fetch the next page of items',
+            ),
+          host: z
+            .string()
+            .optional()
+            .describe(
+              'The Jira host to target when multiple Jira connections are configured; defaults to the first configured connection',
+            ),
+        }),
+      output: z =>
+        z.object({
+          items: z
+            .array(
+              z.object({
+                key: z.string(),
+                summary: z.string(),
+                status: z.string(),
+                issueType: z.string(),
+                url: z.string(),
+                assignee: z.string().optional(),
+              }),
+            )
+            .describe("The board's backlog work items"),
+          nextPageToken: z
+            .string()
+            .optional()
+            .describe(
+              'Cursor for the next page of items; absent when no further items remain',
+            ),
+        }),
+    },
+    action: async ({ input, credentials }) => {
+      await assertPermission(
+        permissions,
+        jiraWorkItemReadPermission,
+        credentials,
+      );
+      const connection = connections.find({ host: input.host });
+      const client = new JiraClient(connection);
+      const { items, nextPageToken } = await client.listBacklogIssues(
+        input.boardId,
+        { maxResults: input.maxResults ?? 50, pageToken: input.pageToken },
+      );
+      return {
+        output: {
+          items: items.map(({ statusCategory, assigneeName, ...item }) => item),
+          nextPageToken,
+        },
+      };
+    },
+  });
+}
