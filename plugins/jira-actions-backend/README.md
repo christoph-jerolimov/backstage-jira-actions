@@ -65,7 +65,11 @@ Usage notes:
   types fail with the list of available ones (see `list-link-types`).
 - `assignee`, `user` (watchers), and search-user `id` values are account
   IDs on Jira Cloud and usernames on Data Center; `search-users` returns
-  exactly the value the other inputs expect.
+  exactly the value the other inputs expect. All of these identity inputs
+  also accept the reserved value `me`, resolved to the invoking user via
+  their catalog profile email and Jira's user search (requires a user
+  caller and a matching Jira account). `update-work-item` additionally
+  takes `unassign: true` to clear the assignee.
 - `update-work-item` edits labels either wholesale via `labels` (replacing
   the full list) or incrementally via `addLabels`/`removeLabels` — the two
   styles cannot be combined in one call. The dedicated `add-label` and

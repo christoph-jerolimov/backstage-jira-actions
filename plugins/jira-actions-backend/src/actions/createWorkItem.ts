@@ -5,6 +5,7 @@ import { CatalogService } from '@backstage/plugin-catalog-node';
 import { JiraClient } from '../lib/JiraClient';
 import { JiraConnectionsReader } from '../lib/connections';
 import { resolveEntityProject } from '../lib/entityProject';
+import { resolveJiraUser } from '../lib/selfUser';
 import { assertPermission, jiraWorkItemWritePermission } from '../permissions';
 
 export function registerCreateWorkItemAction(options: {
@@ -66,7 +67,7 @@ export function registerCreateWorkItemAction(options: {
             .string()
             .optional()
             .describe(
-              'The assignee: a Jira account ID for Jira Cloud, or a username for Jira Data Center',
+              'The assignee: a Jira account ID for Jira Cloud, a username for Jira Data Center, or "me" for the invoking user',
             ),
           parentKey: z
             .string()
@@ -142,8 +143,18 @@ export function registerCreateWorkItemAction(options: {
         host: input.host ?? annotationHost,
       });
       const client = new JiraClient(connection);
+      const assignee =
+        input.assignee !== undefined
+          ? await resolveJiraUser({
+              client,
+              catalog,
+              credentials,
+              value: input.assignee,
+            })
+          : undefined;
       const issue = await client.createIssue({
         ...input,
+        assignee,
         projectKey: projectKey!,
       });
       logger.info(`Created Jira issue ${issue.key} on ${connection.host}`);

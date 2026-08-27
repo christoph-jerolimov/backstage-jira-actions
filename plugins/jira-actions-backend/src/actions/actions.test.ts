@@ -1,4 +1,5 @@
 import {
+  mockCredentials,
   mockServices,
   registerMswTestHooks,
 } from '@backstage/backend-test-utils';
@@ -68,6 +69,7 @@ function makeRegistry(
     actionsRegistry,
     connections: reader,
     permissions,
+    catalog,
   });
   registerRenameWorkItemAction({
     actionsRegistry,
@@ -134,8 +136,8 @@ function makeRegistry(
   registerListFieldsAction(common);
   registerGetWorklogsAction(common);
   registerAddWorklogAction(common);
-  registerAddWatcherAction(common);
-  registerRemoveWatcherAction(common);
+  registerAddWatcherAction({ ...common, catalog });
+  registerRemoveWatcherAction({ ...common, catalog });
   registerListBoardsAction(common);
   registerListSprintsAction(common);
   registerMoveToSprintAction(common);
@@ -2442,6 +2444,141 @@ describe('jira work item actions', () => {
       expect(result.output.fixVersions).toEqual(['1.2.0']);
       expect(result.output.affectsVersions).toEqual(['1.1.0']);
       expect(result.output.components).toEqual(['backend']);
+    });
+  });
+
+  describe('assignee conveniences', () => {
+    const mockUser: Entity = {
+      apiVersion: 'backstage.io/v1alpha1',
+      kind: 'User',
+      metadata: { name: 'mock', namespace: 'default' },
+      spec: { profile: { email: 'jane@example.com' } },
+    };
+
+    it('resolves "me" to the caller for updates', async () => {
+      let received: any;
+      server.use(
+        http.get(
+          'https://example.atlassian.net/rest/api/3/user/search',
+          ({ request }) => {
+            const query = new URL(request.url).searchParams.get('query');
+            expect(query).toBe('jane@example.com');
+            return HttpResponse.json([
+              {
+                accountId: 'acc-jane',
+                displayName: 'Jane Doe',
+                emailAddress: 'jane@example.com',
+                active: true,
+              },
+            ]);
+          },
+        ),
+        http.put(
+          'https://example.atlassian.net/rest/api/3/issue/PROJ-1',
+          async ({ request }) => {
+            received = await request.json();
+            return new HttpResponse(null, { status: 204 });
+          },
+        ),
+      );
+
+      await makeRegistry([cloudConnection], [mockUser]).invoke({
+        id: 'test:update-work-item',
+        input: { issueKey: 'PROJ-1', assignee: 'me' },
+        credentials: mockCredentials.user(),
+      });
+
+      expect(received).toEqual({ fields: { assignee: { id: 'acc-jane' } } });
+    });
+
+    it('watches as the invoking user', async () => {
+      let rawBody: string | undefined;
+      server.use(
+        http.get('https://example.atlassian.net/rest/api/3/user/search', () =>
+          HttpResponse.json([
+            { accountId: 'acc-jane', emailAddress: 'jane@example.com' },
+          ]),
+        ),
+        http.post(
+          'https://example.atlassian.net/rest/api/3/issue/PROJ-1/watchers',
+          async ({ request }) => {
+            rawBody = await request.text();
+            return new HttpResponse(null, { status: 204 });
+          },
+        ),
+      );
+
+      await makeRegistry([cloudConnection], [mockUser]).invoke({
+        id: 'test:add-watcher',
+        input: { issueKey: 'PROJ-1', user: 'me' },
+        credentials: mockCredentials.user(),
+      });
+
+      expect(rawBody).toBe('"acc-jane"');
+    });
+
+    it('fails when no Jira user matches the email', async () => {
+      let written = false;
+      server.use(
+        http.get('https://example.atlassian.net/rest/api/3/user/search', () =>
+          HttpResponse.json([]),
+        ),
+        http.put(
+          'https://example.atlassian.net/rest/api/3/issue/PROJ-1',
+          () => {
+            written = true;
+            return new HttpResponse(null, { status: 204 });
+          },
+        ),
+      );
+
+      await expect(
+        makeRegistry([cloudConnection], [mockUser]).invoke({
+          id: 'test:update-work-item',
+          input: { issueKey: 'PROJ-1', assignee: 'me' },
+          credentials: mockCredentials.user(),
+        }),
+      ).rejects.toThrow(/jane@example.com.*cannot be resolved/);
+      expect(written).toBe(false);
+    });
+
+    it('rejects "me" for a non-user caller', async () => {
+      await expect(
+        makeRegistry([cloudConnection], [mockUser]).invoke({
+          id: 'test:update-work-item',
+          input: { issueKey: 'PROJ-1', assignee: 'me' },
+          credentials: mockCredentials.service(),
+        }),
+      ).rejects.toThrow(/requires a user caller/);
+    });
+
+    it('unassigns an issue with an explicit null', async () => {
+      let received: any;
+      server.use(
+        http.put(
+          'https://example.atlassian.net/rest/api/3/issue/PROJ-1',
+          async ({ request }) => {
+            received = await request.json();
+            return new HttpResponse(null, { status: 204 });
+          },
+        ),
+      );
+
+      await makeRegistry([cloudConnection]).invoke({
+        id: 'test:update-work-item',
+        input: { issueKey: 'PROJ-1', unassign: true },
+      });
+
+      expect(received).toEqual({ fields: { assignee: null } });
+    });
+
+    it('rejects assignee combined with unassign', async () => {
+      await expect(
+        makeRegistry([cloudConnection]).invoke({
+          id: 'test:update-work-item',
+          input: { issueKey: 'PROJ-1', assignee: 'acc-1', unassign: true },
+        }),
+      ).rejects.toThrow(/cannot be combined with "unassign"/);
     });
   });
 

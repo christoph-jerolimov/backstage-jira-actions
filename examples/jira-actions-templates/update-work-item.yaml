@@ -56,7 +56,11 @@ spec:
         assignee:
           title: 'New assignee'
           type: string
-          description: 'A Jira account ID (Cloud) or username (Data Center)'
+          description: 'A Jira account ID (Cloud), username (Data Center), or "me"'
+        unassign:
+          title: 'Unassign'
+          type: boolean
+          description: 'Clear the assignee; cannot be combined with a new assignee'
         issueType:
           title: 'New issue type'
           type: string
@@ -100,6 +104,7 @@ spec:
         addLabels: ${{ parameters.addLabels }}
         removeLabels: ${{ parameters.removeLabels }}
         assignee: ${{ parameters.assignee }}
+        unassign: ${{ parameters.unassign }}
         issueType: ${{ parameters.issueType }}
         fixVersions: ${{ parameters.fixVersions }}
         affectsVersions: ${{ parameters.affectsVersions }}
