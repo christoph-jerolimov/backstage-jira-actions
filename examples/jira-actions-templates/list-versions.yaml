@@ -1,0 +1,49 @@
+apiVersion: scaffolder.backstage.io/v1beta3
+kind: Template
+metadata:
+  name: 'jira-test-list-versions'
+  title: 'Jira Test: List Versions'
+  description: 'Lists the versions of a Jira project via the jira-actions:list-versions action.'
+  tags:
+    - jira
+    - test
+spec:
+  owner: user:guest
+  type: jira-test
+  parameters:
+    - title: List versions
+      properties:
+        projectKey:
+          title: 'Project key'
+          type: string
+          description: 'The Jira project key, e.g. PROJ; provide either this or a catalog entity'
+        entityRef:
+          title: 'Catalog entity'
+          type: string
+          description: 'A catalog entity whose jira/project-key annotation identifies the project; alternative to the project key'
+          ui:field: EntityPicker
+        host:
+          title: 'Jira host'
+          type: string
+          description: 'Only needed when multiple Jira connections are configured'
+  steps:
+    - id: invoke
+      name: 'List versions'
+      action: jira-actions:list-versions
+      input:
+        projectKey: ${{ parameters.projectKey }}
+        entityRef: ${{ parameters.entityRef }}
+        host: ${{ parameters.host }}
+  output:
+    text:
+      - title: 'Versions'
+        content: |
+          | Name | Released | Release date | Description |
+          | --- | --- | --- | --- |
+          {% for v in steps.invoke.output.versions %}| ${{ v.name }} | ${{ 'yes' if v.released else 'no' }} | ${{ v.releaseDate }} | ${{ v.description }} |
+          {% endfor %}
+      - title: 'JSON'
+        content: |
+          ```json
+          ${{ steps.invoke.output | dump(2) }}
+          ```

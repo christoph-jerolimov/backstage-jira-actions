@@ -34,6 +34,11 @@ import { registerSetWorkItemParentAction } from './setWorkItemParent';
 import { registerTransitionWorkItemAction } from './transitionWorkItem';
 import { registerUpdateWorkItemAction } from './updateWorkItem';
 import {
+  registerCreateVersionAction,
+  registerListComponentsAction,
+  registerListVersionsAction,
+} from './versions';
+import {
   registerAddWatcherAction,
   registerRemoveWatcherAction,
 } from './watchers';
@@ -118,6 +123,9 @@ function makeRegistry(
     permissions,
   });
   const common = { actionsRegistry, connections: reader, permissions };
+  registerListVersionsAction({ ...common, catalog });
+  registerListComponentsAction({ ...common, catalog });
+  registerCreateVersionAction({ ...common, catalog });
   registerDeleteWorkItemAction(common);
   registerSearchUsersAction(common);
   registerLinkWorkItemsAction(common);
@@ -2259,6 +2267,184 @@ describe('jira work item actions', () => {
     });
   });
 
+  describe('versions and components', () => {
+    it('lists versions of a project', async () => {
+      server.use(
+        http.get(
+          'https://example.atlassian.net/rest/api/3/project/PROJ/versions',
+          () =>
+            HttpResponse.json([
+              { id: 10, name: '1.2.0', released: false, archived: false },
+            ]),
+        ),
+      );
+
+      const result: any = await makeRegistry([cloudConnection]).invoke({
+        id: 'test:list-versions',
+        input: { projectKey: 'PROJ' },
+      });
+
+      expect(result.output.versions).toEqual([
+        { id: '10', name: '1.2.0', released: false, archived: false },
+      ]);
+    });
+
+    it('lists versions via entity ref', async () => {
+      server.use(
+        http.get(
+          'https://example.atlassian.net/rest/api/3/project/PROJ/versions',
+          () => HttpResponse.json([{ id: 10, name: '1.2.0' }]),
+        ),
+      );
+
+      const result: any = await makeRegistry(
+        [cloudConnection],
+        [componentEntity('my-service', { 'jira/project-key': 'PROJ' })],
+      ).invoke({
+        id: 'test:list-versions',
+        input: { entityRef: 'component:default/my-service' },
+      });
+
+      expect(result.output.versions[0].name).toBe('1.2.0');
+    });
+
+    it('lists components of a project', async () => {
+      server.use(
+        http.get(
+          'https://example.atlassian.net/rest/api/3/project/PROJ/components',
+          () =>
+            HttpResponse.json([
+              { id: 1, name: 'backend', lead: { displayName: 'Jane Doe' } },
+            ]),
+        ),
+      );
+
+      const result: any = await makeRegistry([cloudConnection]).invoke({
+        id: 'test:list-components',
+        input: { projectKey: 'PROJ' },
+      });
+
+      expect(result.output.components).toEqual([
+        { id: '1', name: 'backend', lead: 'Jane Doe' },
+      ]);
+    });
+
+    it('fails with NotFound for an unknown project', async () => {
+      server.use(
+        http.get(
+          'https://example.atlassian.net/rest/api/3/project/NOPE/versions',
+          () =>
+            HttpResponse.json(
+              { errorMessages: ['No project could be found'] },
+              { status: 404 },
+            ),
+        ),
+      );
+
+      await expect(
+        makeRegistry([cloudConnection]).invoke({
+          id: 'test:list-versions',
+          input: { projectKey: 'NOPE' },
+        }),
+      ).rejects.toThrow(/NOPE.*status 404/);
+    });
+
+    it('creates a version', async () => {
+      server.use(
+        http.get('https://example.atlassian.net/rest/api/3/project/PROJ', () =>
+          HttpResponse.json({ id: '10000', key: 'PROJ' }),
+        ),
+        http.post('https://example.atlassian.net/rest/api/3/version', () =>
+          HttpResponse.json({ id: 42, name: '1.2.0' }, { status: 201 }),
+        ),
+      );
+
+      const result = await makeRegistry([cloudConnection]).invoke({
+        id: 'test:create-version',
+        input: { projectKey: 'PROJ', name: '1.2.0' },
+      });
+
+      expect(result).toEqual({ output: { id: '42', name: '1.2.0' } });
+    });
+
+    it('propagates a duplicate version error', async () => {
+      server.use(
+        http.get('https://example.atlassian.net/rest/api/3/project/PROJ', () =>
+          HttpResponse.json({ id: '10000', key: 'PROJ' }),
+        ),
+        http.post('https://example.atlassian.net/rest/api/3/version', () =>
+          HttpResponse.json(
+            { errors: { name: 'A version with this name already exists' } },
+            { status: 400 },
+          ),
+        ),
+      );
+
+      await expect(
+        makeRegistry([cloudConnection]).invoke({
+          id: 'test:create-version',
+          input: { projectKey: 'PROJ', name: '1.2.0' },
+        }),
+      ).rejects.toThrow(/already exists/);
+    });
+
+    it('updates versions and components as name references', async () => {
+      let received: any;
+      server.use(
+        http.put(
+          'https://example.atlassian.net/rest/api/3/issue/PROJ-1',
+          async ({ request }) => {
+            received = await request.json();
+            return new HttpResponse(null, { status: 204 });
+          },
+        ),
+      );
+
+      await makeRegistry([cloudConnection]).invoke({
+        id: 'test:update-work-item',
+        input: {
+          issueKey: 'PROJ-1',
+          fixVersions: ['1.2.0'],
+          components: ['backend'],
+        },
+      });
+
+      expect(received).toEqual({
+        fields: {
+          fixVersions: [{ name: '1.2.0' }],
+          components: [{ name: 'backend' }],
+        },
+      });
+    });
+
+    it('reads versions and components on get-work-item', async () => {
+      server.use(
+        http.get('https://example.atlassian.net/rest/api/3/issue/PROJ-1', () =>
+          HttpResponse.json({
+            key: 'PROJ-1',
+            fields: {
+              summary: 'x',
+              status: { name: 'To Do' },
+              issuetype: { name: 'Story' },
+              fixVersions: [{ name: '1.2.0' }],
+              versions: [{ name: '1.1.0' }],
+              components: [{ name: 'backend' }],
+            },
+          }),
+        ),
+      );
+
+      const result: any = await makeRegistry([cloudConnection]).invoke({
+        id: 'test:get-work-item',
+        input: { issueKey: 'PROJ-1' },
+      });
+
+      expect(result.output.fixVersions).toEqual(['1.2.0']);
+      expect(result.output.affectsVersions).toEqual(['1.1.0']);
+      expect(result.output.components).toEqual(['backend']);
+    });
+  });
+
   describe('permission gating', () => {
     it('rejects a denied caller before any Jira call', async () => {
       let called = false;
@@ -2303,7 +2489,7 @@ describe('jira work item actions', () => {
     });
   });
 
-  it('lists all twenty-six actions with schemas and attributes', async () => {
+  it('lists all twenty-nine actions with schemas and attributes', async () => {
     const { actions } = await makeRegistry([cloudConnection]).list();
     const ids = actions.map(a => a.id).sort();
     expect(ids).toEqual([
@@ -2311,6 +2497,7 @@ describe('jira work item actions', () => {
       'test:add-label',
       'test:add-watcher',
       'test:add-worklog',
+      'test:create-version',
       'test:create-work-item',
       'test:delete-work-item',
       'test:get-comments',
@@ -2318,12 +2505,14 @@ describe('jira work item actions', () => {
       'test:get-worklogs',
       'test:link-work-items',
       'test:list-boards',
+      'test:list-components',
       'test:list-fields',
       'test:list-issue-types',
       'test:list-link-types',
       'test:list-projects',
       'test:list-sprints',
       'test:list-transitions',
+      'test:list-versions',
       'test:move-to-sprint',
       'test:remove-label',
       'test:remove-watcher',
@@ -2343,12 +2532,14 @@ describe('jira work item actions', () => {
       'test:get-work-item',
       'test:get-worklogs',
       'test:list-boards',
+      'test:list-components',
       'test:list-fields',
       'test:list-issue-types',
       'test:list-link-types',
       'test:list-projects',
       'test:list-sprints',
       'test:list-transitions',
+      'test:list-versions',
       'test:search-users',
       'test:search-work-items',
     ]);

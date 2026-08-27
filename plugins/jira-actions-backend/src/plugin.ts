@@ -33,6 +33,11 @@ import { registerSetWorkItemParentAction } from './actions/setWorkItemParent';
 import { registerTransitionWorkItemAction } from './actions/transitionWorkItem';
 import { registerUpdateWorkItemAction } from './actions/updateWorkItem';
 import {
+  registerCreateVersionAction,
+  registerListComponentsAction,
+  registerListVersionsAction,
+} from './actions/versions';
+import {
   registerAddWatcherAction,
   registerRemoveWatcherAction,
 } from './actions/watchers';
@@ -89,6 +94,9 @@ export const jiraActionsPlugin = createBackendPlugin({
         registerListProjectsAction(common);
         registerListIssueTypesAction({ ...common, catalog });
         registerListFieldsAction(common);
+        registerListVersionsAction({ ...common, catalog });
+        registerListComponentsAction({ ...common, catalog });
+        registerCreateVersionAction({ ...common, catalog });
         registerGetWorklogsAction(common);
         registerAddWorklogAction(common);
         registerAddWatcherAction(common);

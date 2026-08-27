@@ -29,6 +29,9 @@ const REQUIRED_INPUTS: Record<string, string[]> = {
   'list-projects': [],
   'list-issue-types': [],
   'list-fields': [],
+  'list-versions': [],
+  'list-components': [],
+  'create-version': ['name'],
   'get-worklogs': ['issueKey'],
   'add-worklog': ['issueKey', 'timeSpent'],
   'add-watcher': ['issueKey', 'user'],
@@ -44,6 +47,9 @@ const ENTITY_REF_ACTIONS = [
   'create-work-item',
   'search-work-items',
   'list-issue-types',
+  'list-versions',
+  'list-components',
+  'create-version',
 ];
 
 // Actions whose templates carry a rich-text format selector.
@@ -96,6 +102,16 @@ const TABLE_OUTPUTS: Record<
   'list-fields': {
     collection: 'fields',
     header: '| ID | Name | Custom | Type |',
+    linkedKey: false,
+  },
+  'list-versions': {
+    collection: 'versions',
+    header: '| Name | Released | Release date | Description |',
+    linkedKey: false,
+  },
+  'list-components': {
+    collection: 'components',
+    header: '| Name | Description | Lead |',
     linkedKey: false,
   },
   'list-boards': {

@@ -75,6 +75,18 @@ export function registerGetWorkItemAction(options: {
             .string()
             .optional()
             .describe('When the issue was last updated'),
+          fixVersions: z
+            .array(z.string())
+            .optional()
+            .describe('The names of the fix versions'),
+          affectsVersions: z
+            .array(z.string())
+            .optional()
+            .describe('The names of the affected versions'),
+          components: z
+            .array(z.string())
+            .optional()
+            .describe('The names of the components'),
           links: z
             .array(
               z.object({

@@ -74,6 +74,22 @@ export function registerCreateWorkItemAction(options: {
             .describe(
               'The key of a parent issue, for sub-tasks or issues under an epic',
             ),
+          fixVersions: z
+            .array(z.string())
+            .optional()
+            .describe(
+              'Version names to set as fix versions (see list-versions)',
+            ),
+          affectsVersions: z
+            .array(z.string())
+            .optional()
+            .describe(
+              'Version names to set as affected versions (see list-versions)',
+            ),
+          components: z
+            .array(z.string())
+            .optional()
+            .describe('Component names to set (see list-components)'),
           customFields: z
             .record(z.any())
             .optional()

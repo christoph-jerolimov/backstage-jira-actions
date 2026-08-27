@@ -28,6 +28,9 @@ so that they can be invoked through the actions service and — via
 | `jira-actions:list-projects`        | Lists the visible Jira projects with URLs and descriptions, optionally name-filtered. Read-only. |
 | `jira-actions:list-issue-types`     | Lists the issue types available in a project. Read-only.                                         |
 | `jira-actions:list-fields`          | Lists the instance's fields, including custom fields with their IDs. Read-only.                  |
+| `jira-actions:list-versions`        | Lists the versions of a project, e.g. valid fixVersions names. Read-only.                        |
+| `jira-actions:list-components`      | Lists the components of a project. Read-only.                                                    |
+| `jira-actions:create-version`       | Creates a version in a project, e.g. for an upcoming release.                                    |
 | `jira-actions:get-worklogs`         | Reads the work log entries of an issue. Read-only.                                               |
 | `jira-actions:add-worklog`          | Logs work on an issue with a Jira duration such as "2h 30m".                                     |
 | `jira-actions:add-watcher`          | Adds a user as a watcher of an issue.                                                            |
@@ -48,6 +51,10 @@ Usage notes:
 - `search-work-items` and `get-comments` page with an opaque cursor: pass a
   previous run's `nextPageToken` output as the `pageToken` input to fetch
   the next page; the token is absent once no further results remain.
+- `fixVersions`, `affectsVersions`, and `components` on create/update take
+  version/component _names_ (Jira resolves them; unknown names fail with
+  Jira's error). `list-versions` and `list-components` discover valid names,
+  and `get-work-item` returns the names on read.
 - `create-work-item`, `update-work-item`, and `get-work-item` handle custom
   fields via `customFields` (values keyed by field id on create/update,
   a list of field ids to read on get); `list-fields` discovers the ids.
@@ -142,7 +149,8 @@ connections:
 ## Catalog annotations
 
 The project-scoped actions (`create-work-item`, `search-work-items`,
-`list-issue-types`) accept an `entityRef` input (e.g.
+`list-issue-types`, `list-versions`, `list-components`, `create-version`)
+accept an `entityRef` input (e.g.
 `component:default/my-service`) as an alternative to `projectKey` — provide
 exactly one of the two. The entity is looked up in the software catalog with
 the caller's credentials and must carry the `jira/project-key` annotation:

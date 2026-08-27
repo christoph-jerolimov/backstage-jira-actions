@@ -13,6 +13,9 @@ export type JiraWorkItemFields = {
   labels?: string[];
   assignee?: string;
   issueType?: string;
+  fixVersions?: string[];
+  affectsVersions?: string[];
+  components?: string[];
   customFields?: JsonObject;
 };
 
@@ -38,6 +41,9 @@ export type JiraWorkItem = {
   parentKey?: string;
   created?: string;
   updated?: string;
+  fixVersions?: string[];
+  affectsVersions?: string[];
+  components?: string[];
   links?: JiraIssueLink[];
   customFields?: JsonObject;
 };
@@ -97,6 +103,23 @@ export type JiraSprint = {
   goal?: string;
 };
 
+export type JiraVersion = {
+  id: string;
+  name: string;
+  released: boolean;
+  archived: boolean;
+  startDate?: string;
+  releaseDate?: string;
+  description?: string;
+};
+
+export type JiraProjectComponent = {
+  id: string;
+  name: string;
+  description?: string;
+  lead?: string;
+};
+
 export type JiraSearchItem = {
   key: string;
   summary: string;
@@ -154,6 +177,9 @@ type RawIssue = {
     created?: string;
     updated?: string;
     issuelinks?: RawIssueLink[];
+    fixVersions?: Array<{ name?: string }>;
+    versions?: Array<{ name?: string }>;
+    components?: Array<{ name?: string }>;
   } & Record<string, unknown>;
 };
 
@@ -258,6 +284,9 @@ export class JiraClient {
             'created',
             'updated',
             'issuelinks',
+            'fixVersions',
+            'versions',
+            'components',
             ...customFieldIds,
           ].join(','),
         },
@@ -286,6 +315,9 @@ export class JiraClient {
       parentKey: fields.parent?.key,
       created: fields.created,
       updated: fields.updated,
+      fixVersions: this.toNames(fields.fixVersions),
+      affectsVersions: this.toNames(fields.versions),
+      components: this.toNames(fields.components),
       links: links.length > 0 ? links : undefined,
       customFields: customFieldIds.length > 0 ? customFields : undefined,
     };
@@ -577,6 +609,110 @@ export class JiraClient {
       subtask: issueType.subtask ?? false,
       description: issueType.description || undefined,
     }));
+  }
+
+  async listVersions(projectKey: string): Promise<JiraVersion[]> {
+    const response = await this.request(
+      'GET',
+      `/project/${encodeURIComponent(projectKey)}/versions`,
+    );
+    if (!response.ok) {
+      await this.throwForResponse(
+        response,
+        `list versions of Jira project ${projectKey}`,
+      );
+    }
+    const body = (await response.json()) as Array<{
+      id: string | number;
+      name?: string;
+      released?: boolean;
+      archived?: boolean;
+      startDate?: string;
+      releaseDate?: string;
+      description?: string;
+    }>;
+    return body.map(version => ({
+      id: String(version.id),
+      name: version.name ?? '',
+      released: version.released ?? false,
+      archived: version.archived ?? false,
+      startDate: version.startDate,
+      releaseDate: version.releaseDate,
+      description: version.description || undefined,
+    }));
+  }
+
+  async listComponents(projectKey: string): Promise<JiraProjectComponent[]> {
+    const response = await this.request(
+      'GET',
+      `/project/${encodeURIComponent(projectKey)}/components`,
+    );
+    if (!response.ok) {
+      await this.throwForResponse(
+        response,
+        `list components of Jira project ${projectKey}`,
+      );
+    }
+    const body = (await response.json()) as Array<{
+      id: string | number;
+      name?: string;
+      description?: string;
+      lead?: { displayName?: string } | null;
+    }>;
+    return body.map(component => ({
+      id: String(component.id),
+      name: component.name ?? '',
+      description: component.description || undefined,
+      lead: component.lead?.displayName || undefined,
+    }));
+  }
+
+  async createVersion(options: {
+    projectKey: string;
+    name: string;
+    description?: string;
+    startDate?: string;
+    releaseDate?: string;
+  }): Promise<{ id: string; name: string }> {
+    // POST /version requires the numeric project id.
+    const projectResponse = await this.request(
+      'GET',
+      `/project/${encodeURIComponent(options.projectKey)}`,
+    );
+    if (!projectResponse.ok) {
+      await this.throwForResponse(
+        projectResponse,
+        `get Jira project ${options.projectKey}`,
+      );
+    }
+    const project = (await projectResponse.json()) as { id: string | number };
+
+    const response = await this.request('POST', '/version', {
+      body: {
+        projectId: Number(project.id),
+        name: options.name,
+        ...(options.description !== undefined
+          ? { description: options.description }
+          : {}),
+        ...(options.startDate !== undefined
+          ? { startDate: options.startDate }
+          : {}),
+        ...(options.releaseDate !== undefined
+          ? { releaseDate: options.releaseDate }
+          : {}),
+      },
+    });
+    if (!response.ok) {
+      await this.throwForResponse(
+        response,
+        `create version in Jira project ${options.projectKey}`,
+      );
+    }
+    const body = (await response.json()) as {
+      id: string | number;
+      name?: string;
+    };
+    return { id: String(body.id), name: body.name ?? options.name };
   }
 
   async searchUsers(
@@ -936,6 +1072,13 @@ export class JiraClient {
     };
   }
 
+  private toNames(entries?: Array<{ name?: string }>): string[] | undefined {
+    const names = (entries ?? [])
+      .map(entry => entry.name)
+      .filter((name): name is string => Boolean(name));
+    return names.length > 0 ? names : undefined;
+  }
+
   private toIssueLink(link: RawIssueLink): JiraIssueLink {
     // The direction description reads from the issue the link was fetched
     // for: an outwardIssue entry means "this issue <outward> that key".
@@ -1005,6 +1148,17 @@ export class JiraClient {
       fields.assignee = this.isCloud
         ? { id: input.assignee }
         : { name: input.assignee };
+    }
+    // Versions and components are referenced by name; Jira resolves them
+    // and rejects unknown names. "affectsVersions" maps to Jira's "versions".
+    if (input.fixVersions !== undefined) {
+      fields.fixVersions = input.fixVersions.map(name => ({ name }));
+    }
+    if (input.affectsVersions !== undefined) {
+      fields.versions = input.affectsVersions.map(name => ({ name }));
+    }
+    if (input.components !== undefined) {
+      fields.components = input.components.map(name => ({ name }));
     }
     // Custom field values are passed to Jira verbatim, keyed by field id;
     // spread last so an explicit custom value wins an id collision.

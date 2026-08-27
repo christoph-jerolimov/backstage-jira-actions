@@ -24,6 +24,9 @@ spec:
     - ./list-projects.yaml
     - ./list-issue-types.yaml
     - ./list-fields.yaml
+    - ./list-versions.yaml
+    - ./list-components.yaml
+    - ./create-version.yaml
     - ./get-worklogs.yaml
     - ./add-worklog.yaml
     - ./add-watcher.yaml
