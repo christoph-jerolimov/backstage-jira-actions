@@ -61,6 +61,24 @@ spec:
           title: 'New issue type'
           type: string
           description: 'The new issue type name, e.g. Story, Bug or Task'
+        fixVersions:
+          title: 'Fix versions'
+          type: array
+          description: 'The full new list of fix version names, replacing existing ones'
+          items:
+            type: string
+        affectsVersions:
+          title: 'Affected versions'
+          type: array
+          description: 'The full new list of affected version names, replacing existing ones'
+          items:
+            type: string
+        components:
+          title: 'Components'
+          type: array
+          description: 'The full new list of component names, replacing existing ones'
+          items:
+            type: string
         customFields:
           title: 'Custom fields'
           type: object
@@ -83,6 +101,9 @@ spec:
         removeLabels: ${{ parameters.removeLabels }}
         assignee: ${{ parameters.assignee }}
         issueType: ${{ parameters.issueType }}
+        fixVersions: ${{ parameters.fixVersions }}
+        affectsVersions: ${{ parameters.affectsVersions }}
+        components: ${{ parameters.components }}
         customFields: ${{ parameters.customFields }}
         host: ${{ parameters.host }}
   output:

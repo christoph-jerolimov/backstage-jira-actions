@@ -13,6 +13,9 @@ const UPDATABLE_FIELDS = [
   'removeLabels',
   'assignee',
   'issueType',
+  'fixVersions',
+  'affectsVersions',
+  'components',
   'customFields',
 ] as const;
 
@@ -81,6 +84,24 @@ export function registerUpdateWorkItemAction(options: {
             .string()
             .optional()
             .describe('The new issue type name, e.g. "Story", "Bug" or "Task"'),
+          fixVersions: z
+            .array(z.string())
+            .optional()
+            .describe(
+              'The full new list of fix version names, replacing existing ones (see list-versions)',
+            ),
+          affectsVersions: z
+            .array(z.string())
+            .optional()
+            .describe(
+              'The full new list of affected version names, replacing existing ones (see list-versions)',
+            ),
+          components: z
+            .array(z.string())
+            .optional()
+            .describe(
+              'The full new list of component names, replacing existing ones (see list-components)',
+            ),
           customFields: z
             .record(z.any())
             .optional()

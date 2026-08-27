@@ -1,0 +1,65 @@
+apiVersion: scaffolder.backstage.io/v1beta3
+kind: Template
+metadata:
+  name: 'jira-test-create-version'
+  title: 'Jira Test: Create Version'
+  description: 'Creates a version in a Jira project via the jira-actions:create-version action.'
+  tags:
+    - jira
+    - test
+spec:
+  owner: user:guest
+  type: jira-test
+  parameters:
+    - title: Create version
+      required:
+        - name
+      properties:
+        projectKey:
+          title: 'Project key'
+          type: string
+          description: 'The Jira project key, e.g. PROJ; provide either this or a catalog entity'
+        entityRef:
+          title: 'Catalog entity'
+          type: string
+          description: 'A catalog entity whose jira/project-key annotation identifies the project; alternative to the project key'
+          ui:field: EntityPicker
+        name:
+          title: 'Name'
+          type: string
+          description: 'The version name, e.g. 1.2.0'
+        description:
+          title: 'Description'
+          type: string
+          description: 'The version description'
+        startDate:
+          title: 'Start date'
+          type: string
+          description: 'The start date as YYYY-MM-DD'
+        releaseDate:
+          title: 'Release date'
+          type: string
+          description: 'The planned release date as YYYY-MM-DD'
+        host:
+          title: 'Jira host'
+          type: string
+          description: 'Only needed when multiple Jira connections are configured'
+  steps:
+    - id: invoke
+      name: 'Create version'
+      action: jira-actions:create-version
+      input:
+        projectKey: ${{ parameters.projectKey }}
+        entityRef: ${{ parameters.entityRef }}
+        name: ${{ parameters.name }}
+        description: ${{ parameters.description }}
+        startDate: ${{ parameters.startDate }}
+        releaseDate: ${{ parameters.releaseDate }}
+        host: ${{ parameters.host }}
+  output:
+    text:
+      - title: Result
+        content: |
+          ```json
+          ${{ steps.invoke.output | dump(2) }}
+          ```

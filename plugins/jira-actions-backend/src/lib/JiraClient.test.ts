@@ -1625,3 +1625,161 @@ describe('JiraClient coverage expansion', () => {
     });
   });
 });
+
+describe('JiraClient versions and components', () => {
+  const server = setupServer();
+  registerMswTestHooks(server);
+
+  it('lists versions of a project', async () => {
+    server.use(
+      http.get(
+        'https://example.atlassian.net/rest/api/3/project/PROJ/versions',
+        () =>
+          HttpResponse.json([
+            {
+              id: 10,
+              name: '1.2.0',
+              released: false,
+              archived: false,
+              releaseDate: '2026-09-01',
+              description: 'Next release',
+            },
+            { id: 11, name: '1.1.0', released: true, archived: true },
+          ]),
+      ),
+    );
+
+    const versions = await new JiraClient(cloudConnection).listVersions('PROJ');
+    expect(versions).toEqual([
+      {
+        id: '10',
+        name: '1.2.0',
+        released: false,
+        archived: false,
+        startDate: undefined,
+        releaseDate: '2026-09-01',
+        description: 'Next release',
+      },
+      {
+        id: '11',
+        name: '1.1.0',
+        released: true,
+        archived: true,
+        startDate: undefined,
+        releaseDate: undefined,
+        description: undefined,
+      },
+    ]);
+  });
+
+  it('lists components of a project and maps 404', async () => {
+    server.use(
+      http.get(
+        'https://example.atlassian.net/rest/api/3/project/PROJ/components',
+        () =>
+          HttpResponse.json([
+            {
+              id: 1,
+              name: 'backend',
+              description: 'The backend',
+              lead: { displayName: 'Jane Doe' },
+            },
+          ]),
+      ),
+      http.get(
+        'https://example.atlassian.net/rest/api/3/project/NOPE/components',
+        () =>
+          HttpResponse.json(
+            { errorMessages: ['No project could be found'] },
+            { status: 404 },
+          ),
+      ),
+    );
+
+    const client = new JiraClient(cloudConnection);
+    expect(await client.listComponents('PROJ')).toEqual([
+      {
+        id: '1',
+        name: 'backend',
+        description: 'The backend',
+        lead: 'Jane Doe',
+      },
+    ]);
+    await expect(client.listComponents('NOPE')).rejects.toThrow(
+      /components of Jira project NOPE, status 404/,
+    );
+  });
+
+  it('creates a version after resolving the project id', async () => {
+    let received: any;
+    server.use(
+      http.get('https://example.atlassian.net/rest/api/3/project/PROJ', () =>
+        HttpResponse.json({ id: '10000', key: 'PROJ' }),
+      ),
+      http.post(
+        'https://example.atlassian.net/rest/api/3/version',
+        async ({ request }) => {
+          received = await request.json();
+          return HttpResponse.json({ id: 42, name: '1.2.0' }, { status: 201 });
+        },
+      ),
+    );
+
+    const result = await new JiraClient(cloudConnection).createVersion({
+      projectKey: 'PROJ',
+      name: '1.2.0',
+      releaseDate: '2026-09-01',
+    });
+
+    expect(received).toEqual({
+      projectId: 10000,
+      name: '1.2.0',
+      releaseDate: '2026-09-01',
+    });
+    expect(result).toEqual({ id: '42', name: '1.2.0' });
+  });
+
+  it('maps version and component fields on create and read', async () => {
+    let createBody: any;
+    server.use(
+      http.post(
+        'https://example.atlassian.net/rest/api/3/issue',
+        async ({ request }) => {
+          createBody = await request.json();
+          return HttpResponse.json({ id: '1', key: 'PROJ-1' }, { status: 201 });
+        },
+      ),
+      http.get('https://example.atlassian.net/rest/api/3/issue/PROJ-1', () =>
+        HttpResponse.json({
+          key: 'PROJ-1',
+          fields: {
+            summary: 'x',
+            status: { name: 'To Do' },
+            issuetype: { name: 'Story' },
+            fixVersions: [{ name: '1.2.0' }],
+            versions: [{ name: '1.1.0' }],
+            components: [{ name: 'backend' }],
+          },
+        }),
+      ),
+    );
+
+    const client = new JiraClient(cloudConnection);
+    await client.createIssue({
+      projectKey: 'PROJ',
+      issueType: 'Story',
+      summary: 'x',
+      fixVersions: ['1.2.0'],
+      affectsVersions: ['1.1.0'],
+      components: ['backend'],
+    });
+    expect(createBody.fields.fixVersions).toEqual([{ name: '1.2.0' }]);
+    expect(createBody.fields.versions).toEqual([{ name: '1.1.0' }]);
+    expect(createBody.fields.components).toEqual([{ name: 'backend' }]);
+
+    const issue = await client.getIssue('PROJ-1');
+    expect(issue.fixVersions).toEqual(['1.2.0']);
+    expect(issue.affectsVersions).toEqual(['1.1.0']);
+    expect(issue.components).toEqual(['backend']);
+  });
+});

@@ -59,6 +59,24 @@ spec:
           title: 'Parent issue key'
           type: string
           description: 'The key of a parent issue, for sub-tasks or issues under an epic'
+        fixVersions:
+          title: 'Fix versions'
+          type: array
+          description: 'Version names to set as fix versions (see list-versions)'
+          items:
+            type: string
+        affectsVersions:
+          title: 'Affected versions'
+          type: array
+          description: 'Version names to set as affected versions (see list-versions)'
+          items:
+            type: string
+        components:
+          title: 'Components'
+          type: array
+          description: 'Component names to set (see list-components)'
+          items:
+            type: string
         customFields:
           title: 'Custom fields'
           type: object
@@ -81,6 +99,9 @@ spec:
         labels: ${{ parameters.labels }}
         assignee: ${{ parameters.assignee }}
         parentKey: ${{ parameters.parentKey }}
+        fixVersions: ${{ parameters.fixVersions }}
+        affectsVersions: ${{ parameters.affectsVersions }}
+        components: ${{ parameters.components }}
         customFields: ${{ parameters.customFields }}
         host: ${{ parameters.host }}
   output:
