@@ -21,6 +21,8 @@ so that they can be invoked through the actions service and — via
 | `jira-actions:get-comments`         | Reads the comments of an issue with page cursors, bodies as Markdown by default. Read-only.      |
 | `jira-actions:add-label`            | Adds a single label to an issue without affecting its other labels.                              |
 | `jira-actions:remove-label`         | Removes a single label from an issue without affecting its other labels.                         |
+| `jira-actions:add-remote-link`      | Attaches a titled web link (e.g. a PR or Backstage entity page) to an issue.                     |
+| `jira-actions:get-remote-links`     | Reads the web links attached to an issue. Read-only.                                             |
 | `jira-actions:link-work-items`      | Links two issues with a relation such as "blocks" or "duplicates".                               |
 | `jira-actions:list-link-types`      | Lists the available issue link types with their relation descriptions. Read-only.                |
 | `jira-actions:list-transitions`     | Lists the statuses an issue can currently move to. Read-only.                                    |

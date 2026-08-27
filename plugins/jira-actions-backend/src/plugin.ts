@@ -26,6 +26,10 @@ import { registerListFieldsAction } from './actions/listFields';
 import { registerListIssueTypesAction } from './actions/listIssueTypes';
 import { registerListProjectsAction } from './actions/listProjects';
 import { registerListTransitionsAction } from './actions/listTransitions';
+import {
+  registerAddRemoteLinkAction,
+  registerGetRemoteLinksAction,
+} from './actions/remoteLinks';
 import { registerRenameWorkItemAction } from './actions/renameWorkItem';
 import { registerSearchUsersAction } from './actions/searchUsers';
 import { registerSearchWorkItemsAction } from './actions/searchWorkItems';
@@ -87,6 +91,8 @@ export const jiraActionsPlugin = createBackendPlugin({
         registerSearchWorkItemsAction({ ...common, catalog });
         registerSearchUsersAction(common);
         registerAddCommentAction(common);
+        registerAddRemoteLinkAction(common);
+        registerGetRemoteLinksAction(common);
         registerLinkWorkItemsAction(common);
         registerListLinkTypesAction(common);
         registerListTransitionsAction(common);

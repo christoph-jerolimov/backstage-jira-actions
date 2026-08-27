@@ -22,6 +22,8 @@ const REQUIRED_INPUTS: Record<string, string[]> = {
   'get-comments': ['issueKey'],
   'add-label': ['issueKey', 'label'],
   'remove-label': ['issueKey', 'label'],
+  'add-remote-link': ['issueKey', 'url', 'title'],
+  'get-remote-links': ['issueKey'],
   'link-work-items': ['issueKey', 'targetKey', 'linkType'],
   'list-link-types': [],
   'list-transitions': ['issueKey'],
@@ -112,6 +114,11 @@ const TABLE_OUTPUTS: Record<
   'list-components': {
     collection: 'components',
     header: '| Name | Description | Lead |',
+    linkedKey: false,
+  },
+  'get-remote-links': {
+    collection: 'remoteLinks',
+    header: '| Title | URL |',
     linkedKey: false,
   },
   'list-boards': {
@@ -262,6 +269,8 @@ describe('jira actions test templates', () => {
         'get-comments',
         'add-label',
         'remove-label',
+        'add-remote-link',
+        'get-remote-links',
         'link-work-items',
         'transition-work-item',
         'get-worklogs',
