@@ -1,8 +1,10 @@
 import { PermissionsService } from '@backstage/backend-plugin-api';
 import { ActionsRegistryService } from '@backstage/backend-plugin-api/alpha';
 import { InputError } from '@backstage/errors';
+import { CatalogService } from '@backstage/plugin-catalog-node';
 import { JiraClient } from '../lib/JiraClient';
 import { JiraConnectionsReader } from '../lib/connections';
+import { resolveJiraUser } from '../lib/selfUser';
 import { assertPermission, jiraWorkItemWritePermission } from '../permissions';
 
 const UPDATABLE_FIELDS = [
@@ -12,6 +14,7 @@ const UPDATABLE_FIELDS = [
   'addLabels',
   'removeLabels',
   'assignee',
+  'unassign',
   'issueType',
   'fixVersions',
   'affectsVersions',
@@ -23,8 +26,9 @@ export function registerUpdateWorkItemAction(options: {
   actionsRegistry: ActionsRegistryService;
   connections: JiraConnectionsReader;
   permissions: PermissionsService;
+  catalog: CatalogService;
 }) {
-  const { actionsRegistry, connections, permissions } = options;
+  const { actionsRegistry, connections, permissions, catalog } = options;
 
   actionsRegistry.register({
     name: 'update-work-item',
@@ -78,8 +82,12 @@ export function registerUpdateWorkItemAction(options: {
             .string()
             .optional()
             .describe(
-              'The new assignee: a Jira account ID for Jira Cloud, or a username for Jira Data Center',
+              'The new assignee: a Jira account ID for Jira Cloud, a username for Jira Data Center, or "me" for the invoking user',
             ),
+          unassign: z
+            .boolean()
+            .optional()
+            .describe('Clear the assignee; cannot be combined with "assignee"'),
           issueType: z
             .string()
             .optional()
@@ -142,15 +150,29 @@ export function registerUpdateWorkItemAction(options: {
           'The "labels" field replaces all labels and cannot be combined with "addLabels" or "removeLabels"',
         );
       }
+      if (input.assignee !== undefined && input.unassign) {
+        throw new InputError(
+          'The "assignee" field cannot be combined with "unassign"',
+        );
+      }
       const connection = connections.find({ host: input.host });
       const client = new JiraClient(connection);
+      const assignee =
+        input.assignee !== undefined
+          ? await resolveJiraUser({
+              client,
+              catalog,
+              credentials,
+              value: input.assignee,
+            })
+          : undefined;
       const labelEdits =
         input.addLabels !== undefined || input.removeLabels !== undefined
           ? { add: input.addLabels, remove: input.removeLabels }
           : undefined;
       const result = await client.updateIssue(
         input.issueKey,
-        input,
+        { ...input, assignee },
         labelEdits,
       );
       logger.info(`Updated Jira issue ${result.key} on ${connection.host}`);

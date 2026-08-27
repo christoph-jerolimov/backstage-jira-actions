@@ -1,16 +1,19 @@
 import { PermissionsService } from '@backstage/backend-plugin-api';
 import { ActionsRegistryService } from '@backstage/backend-plugin-api/alpha';
+import { CatalogService } from '@backstage/plugin-catalog-node';
 import { JiraClient } from '../lib/JiraClient';
 import { JiraConnectionsReader } from '../lib/connections';
+import { resolveJiraUser } from '../lib/selfUser';
 import { assertPermission, jiraWorkItemWritePermission } from '../permissions';
 
 function registerWatcherAction(options: {
   actionsRegistry: ActionsRegistryService;
   connections: JiraConnectionsReader;
   permissions: PermissionsService;
+  catalog: CatalogService;
   mode: 'add' | 'remove';
 }) {
-  const { actionsRegistry, connections, permissions, mode } = options;
+  const { actionsRegistry, connections, permissions, catalog, mode } = options;
 
   actionsRegistry.register({
     name: `${mode}-watcher`,
@@ -36,7 +39,7 @@ function registerWatcherAction(options: {
           user: z
             .string()
             .describe(
-              'The user to add or remove: a Jira account ID on Jira Cloud, a username on Jira Data Center (as returned by search-users)',
+              'The user to add or remove: a Jira account ID on Jira Cloud, a username on Jira Data Center (as returned by search-users), or "me" for the invoking user',
             ),
           host: z
             .string()
@@ -59,10 +62,16 @@ function registerWatcherAction(options: {
       );
       const connection = connections.find({ host: input.host });
       const client = new JiraClient(connection);
+      const user = await resolveJiraUser({
+        client,
+        catalog,
+        credentials,
+        value: input.user,
+      });
       if (mode === 'add') {
-        await client.addWatcher(input.issueKey, input.user);
+        await client.addWatcher(input.issueKey, user);
       } else {
-        await client.removeWatcher(input.issueKey, input.user);
+        await client.removeWatcher(input.issueKey, user);
       }
       logger.info(
         `${mode === 'add' ? 'Added' : 'Removed'} watcher on Jira issue ${
@@ -83,6 +92,7 @@ export function registerAddWatcherAction(options: {
   actionsRegistry: ActionsRegistryService;
   connections: JiraConnectionsReader;
   permissions: PermissionsService;
+  catalog: CatalogService;
 }) {
   registerWatcherAction({ ...options, mode: 'add' });
 }
@@ -91,6 +101,7 @@ export function registerRemoveWatcherAction(options: {
   actionsRegistry: ActionsRegistryService;
   connections: JiraConnectionsReader;
   permissions: PermissionsService;
+  catalog: CatalogService;
 }) {
   registerWatcherAction({ ...options, mode: 'remove' });
 }

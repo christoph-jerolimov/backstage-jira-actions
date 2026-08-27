@@ -12,6 +12,7 @@ export type JiraWorkItemFields = {
   descriptionFormat?: RichTextFormat;
   labels?: string[];
   assignee?: string;
+  unassign?: boolean;
   issueType?: string;
   fixVersions?: string[];
   affectsVersions?: string[];
@@ -1148,6 +1149,10 @@ export class JiraClient {
       fields.assignee = this.isCloud
         ? { id: input.assignee }
         : { name: input.assignee };
+    }
+    // Jira clears the assignee only with an explicit null.
+    if (input.unassign) {
+      fields.assignee = null;
     }
     // Versions and components are referenced by name; Jira resolves them
     // and rejects unknown names. "affectsVersions" maps to Jira's "versions".

@@ -76,7 +76,7 @@ export const jiraActionsPlugin = createBackendPlugin({
         const connections = JiraConnectionsReader.fromConfig(config);
         const common = { actionsRegistry, connections, permissions };
         registerCreateWorkItemAction({ ...common, catalog });
-        registerUpdateWorkItemAction(common);
+        registerUpdateWorkItemAction({ ...common, catalog });
         registerRenameWorkItemAction(common);
         registerSetWorkItemParentAction(common);
         registerDeleteWorkItemAction(common);
@@ -99,8 +99,8 @@ export const jiraActionsPlugin = createBackendPlugin({
         registerCreateVersionAction({ ...common, catalog });
         registerGetWorklogsAction(common);
         registerAddWorklogAction(common);
-        registerAddWatcherAction(common);
-        registerRemoveWatcherAction(common);
+        registerAddWatcherAction({ ...common, catalog });
+        registerRemoveWatcherAction({ ...common, catalog });
         registerListBoardsAction(common);
         registerListSprintsAction(common);
         registerMoveToSprintAction(common);
