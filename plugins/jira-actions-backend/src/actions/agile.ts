@@ -1,5 +1,6 @@
 import { PermissionsService } from '@backstage/backend-plugin-api';
 import { ActionsRegistryService } from '@backstage/backend-plugin-api/alpha';
+import { InputError } from '@backstage/errors';
 import { JiraClient } from '../lib/JiraClient';
 import { JiraConnectionsReader } from '../lib/connections';
 import {
@@ -364,6 +365,266 @@ export function registerMoveToBacklogAction(options: {
         `Moved ${input.issueKeys.length} Jira issue(s) to the backlog`,
       );
       return { output: { issueKeys: input.issueKeys } };
+    },
+  });
+}
+
+const sprintOutput = (z: any) =>
+  z.object({
+    id: z.string().describe('The sprint ID'),
+    name: z.string().describe('The sprint name'),
+    state: z
+      .string()
+      .optional()
+      .describe('The sprint state: active, future, or closed'),
+    startDate: z.string().optional().describe('When the sprint starts'),
+    endDate: z.string().optional().describe('When the sprint ends'),
+    goal: z.string().optional().describe('The sprint goal'),
+  });
+
+export function registerCreateSprintAction(options: {
+  actionsRegistry: ActionsRegistryService;
+  connections: JiraConnectionsReader;
+  permissions: PermissionsService;
+}) {
+  const { actionsRegistry, connections, permissions } = options;
+
+  actionsRegistry.register({
+    name: 'create-sprint',
+    title: 'Create Jira Sprint',
+    description:
+      'Creates a future sprint on an agile board, optionally with dates and a goal.',
+    attributes: {
+      readOnly: false,
+      destructive: false,
+      idempotent: false,
+    },
+    schema: {
+      input: z =>
+        z.object({
+          boardId: z
+            .string()
+            .describe('The ID of the board, as returned by list-boards'),
+          name: z.string().describe('The sprint name'),
+          startDate: z
+            .string()
+            .optional()
+            .describe('The planned start as an ISO timestamp'),
+          endDate: z
+            .string()
+            .optional()
+            .describe('The planned end as an ISO timestamp'),
+          goal: z.string().optional().describe('The sprint goal'),
+          host: z
+            .string()
+            .optional()
+            .describe(
+              'The Jira host to target when multiple Jira connections are configured; defaults to the first configured connection',
+            ),
+        }),
+      output: z => sprintOutput(z),
+    },
+    action: async ({ input, logger, credentials }) => {
+      await assertPermission(
+        permissions,
+        jiraWorkItemWritePermission,
+        credentials,
+      );
+      const connection = connections.find({ host: input.host });
+      const client = new JiraClient(connection);
+      const sprint = await client.createSprint({
+        boardId: input.boardId,
+        name: input.name,
+        startDate: input.startDate,
+        endDate: input.endDate,
+        goal: input.goal,
+      });
+      logger.info(
+        `Created Jira sprint ${sprint.name} on board ${input.boardId}`,
+      );
+      return { output: sprint };
+    },
+  });
+}
+
+export function registerUpdateSprintAction(options: {
+  actionsRegistry: ActionsRegistryService;
+  connections: JiraConnectionsReader;
+  permissions: PermissionsService;
+}) {
+  const { actionsRegistry, connections, permissions } = options;
+
+  actionsRegistry.register({
+    name: 'update-sprint',
+    title: 'Update Jira Sprint',
+    description:
+      "Edits a sprint's name, goal, and/or dates. At least one field must be provided; unnamed fields stay untouched.",
+    attributes: {
+      readOnly: false,
+      destructive: false,
+      idempotent: true,
+    },
+    schema: {
+      input: z =>
+        z.object({
+          sprintId: z
+            .string()
+            .describe('The ID of the sprint, as returned by list-sprints'),
+          name: z.string().optional().describe('The new sprint name'),
+          goal: z.string().optional().describe('The new sprint goal'),
+          startDate: z
+            .string()
+            .optional()
+            .describe('The new start as an ISO timestamp'),
+          endDate: z
+            .string()
+            .optional()
+            .describe('The new end as an ISO timestamp'),
+          host: z
+            .string()
+            .optional()
+            .describe(
+              'The Jira host to target when multiple Jira connections are configured; defaults to the first configured connection',
+            ),
+        }),
+      output: z => sprintOutput(z),
+    },
+    action: async ({ input, logger, credentials }) => {
+      await assertPermission(
+        permissions,
+        jiraWorkItemWritePermission,
+        credentials,
+      );
+      if (
+        input.name === undefined &&
+        input.goal === undefined &&
+        input.startDate === undefined &&
+        input.endDate === undefined
+      ) {
+        throw new InputError(
+          'At least one of "name", "goal", "startDate", "endDate" must be provided',
+        );
+      }
+      const connection = connections.find({ host: input.host });
+      const client = new JiraClient(connection);
+      const sprint = await client.updateSprint(input.sprintId, {
+        name: input.name,
+        goal: input.goal,
+        startDate: input.startDate,
+        endDate: input.endDate,
+      });
+      logger.info(`Updated Jira sprint ${input.sprintId}`);
+      return { output: sprint };
+    },
+  });
+}
+
+export function registerStartSprintAction(options: {
+  actionsRegistry: ActionsRegistryService;
+  connections: JiraConnectionsReader;
+  permissions: PermissionsService;
+}) {
+  const { actionsRegistry, connections, permissions } = options;
+
+  actionsRegistry.register({
+    name: 'start-sprint',
+    title: 'Start Jira Sprint',
+    description:
+      'Activates a future sprint. Jira requires start and end dates to start a sprint, so they can be passed along.',
+    attributes: {
+      readOnly: false,
+      destructive: false,
+      idempotent: true,
+    },
+    schema: {
+      input: z =>
+        z.object({
+          sprintId: z
+            .string()
+            .describe('The ID of the sprint, as returned by list-sprints'),
+          startDate: z
+            .string()
+            .optional()
+            .describe(
+              'The start as an ISO timestamp, if not set on the sprint',
+            ),
+          endDate: z
+            .string()
+            .optional()
+            .describe('The end as an ISO timestamp, if not set on the sprint'),
+          host: z
+            .string()
+            .optional()
+            .describe(
+              'The Jira host to target when multiple Jira connections are configured; defaults to the first configured connection',
+            ),
+        }),
+      output: z => sprintOutput(z),
+    },
+    action: async ({ input, logger, credentials }) => {
+      await assertPermission(
+        permissions,
+        jiraWorkItemWritePermission,
+        credentials,
+      );
+      const connection = connections.find({ host: input.host });
+      const client = new JiraClient(connection);
+      const sprint = await client.updateSprint(input.sprintId, {
+        state: 'active',
+        startDate: input.startDate,
+        endDate: input.endDate,
+      });
+      logger.info(`Started Jira sprint ${input.sprintId}`);
+      return { output: sprint };
+    },
+  });
+}
+
+export function registerCompleteSprintAction(options: {
+  actionsRegistry: ActionsRegistryService;
+  connections: JiraConnectionsReader;
+  permissions: PermissionsService;
+}) {
+  const { actionsRegistry, connections, permissions } = options;
+
+  actionsRegistry.register({
+    name: 'complete-sprint',
+    title: 'Complete Jira Sprint',
+    description:
+      "Closes an active sprint. Incomplete issues follow Jira's default behavior and move to the backlog.",
+    attributes: {
+      readOnly: false,
+      destructive: false,
+      idempotent: true,
+    },
+    schema: {
+      input: z =>
+        z.object({
+          sprintId: z
+            .string()
+            .describe('The ID of the sprint, as returned by list-sprints'),
+          host: z
+            .string()
+            .optional()
+            .describe(
+              'The Jira host to target when multiple Jira connections are configured; defaults to the first configured connection',
+            ),
+        }),
+      output: z => sprintOutput(z),
+    },
+    action: async ({ input, logger, credentials }) => {
+      await assertPermission(
+        permissions,
+        jiraWorkItemWritePermission,
+        credentials,
+      );
+      const connection = connections.find({ host: input.host });
+      const client = new JiraClient(connection);
+      const sprint = await client.updateSprint(input.sprintId, {
+        state: 'closed',
+      });
+      logger.info(`Completed Jira sprint ${input.sprintId}`);
+      return { output: sprint };
     },
   });
 }

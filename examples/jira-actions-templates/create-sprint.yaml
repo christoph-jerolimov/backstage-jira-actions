@@ -1,0 +1,60 @@
+apiVersion: scaffolder.backstage.io/v1beta3
+kind: Template
+metadata:
+  name: 'jira-test-create-sprint'
+  title: 'Jira Test: Create Sprint'
+  description: 'Creates a future sprint on an agile board via the jira-actions:create-sprint action.'
+  tags:
+    - jira
+    - test
+spec:
+  owner: user:guest
+  type: jira-test
+  parameters:
+    - title: Create sprint
+      required:
+        - boardId
+        - name
+      properties:
+        boardId:
+          title: 'Board ID'
+          type: string
+          description: 'The ID of the board, as returned by list-boards'
+        name:
+          title: 'Name'
+          type: string
+          description: 'The sprint name'
+        startDate:
+          title: 'Start date'
+          type: string
+          description: 'The planned start as an ISO timestamp'
+        endDate:
+          title: 'End date'
+          type: string
+          description: 'The planned end as an ISO timestamp'
+        goal:
+          title: 'Goal'
+          type: string
+          description: 'The sprint goal'
+        host:
+          title: 'Jira host'
+          type: string
+          description: 'Only needed when multiple Jira connections are configured'
+  steps:
+    - id: invoke
+      name: 'Create sprint'
+      action: jira-actions:create-sprint
+      input:
+        boardId: ${{ parameters.boardId }}
+        name: ${{ parameters.name }}
+        startDate: ${{ parameters.startDate }}
+        endDate: ${{ parameters.endDate }}
+        goal: ${{ parameters.goal }}
+        host: ${{ parameters.host }}
+  output:
+    text:
+      - title: Result
+        content: |
+          ```json
+          ${{ steps.invoke.output | dump(2) }}
+          ```

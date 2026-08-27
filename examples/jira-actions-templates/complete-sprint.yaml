@@ -1,0 +1,39 @@
+apiVersion: scaffolder.backstage.io/v1beta3
+kind: Template
+metadata:
+  name: 'jira-test-complete-sprint'
+  title: 'Jira Test: Complete Sprint'
+  description: 'Closes an active Jira sprint via the jira-actions:complete-sprint action.'
+  tags:
+    - jira
+    - test
+spec:
+  owner: user:guest
+  type: jira-test
+  parameters:
+    - title: Complete sprint
+      required:
+        - sprintId
+      properties:
+        sprintId:
+          title: 'Sprint ID'
+          type: string
+          description: 'The ID of the sprint, as returned by list-sprints'
+        host:
+          title: 'Jira host'
+          type: string
+          description: 'Only needed when multiple Jira connections are configured'
+  steps:
+    - id: invoke
+      name: 'Complete sprint'
+      action: jira-actions:complete-sprint
+      input:
+        sprintId: ${{ parameters.sprintId }}
+        host: ${{ parameters.host }}
+  output:
+    text:
+      - title: Result
+        content: |
+          ```json
+          ${{ steps.invoke.output | dump(2) }}
+          ```

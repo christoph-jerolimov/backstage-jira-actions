@@ -1,0 +1,49 @@
+apiVersion: scaffolder.backstage.io/v1beta3
+kind: Template
+metadata:
+  name: 'jira-test-start-sprint'
+  title: 'Jira Test: Start Sprint'
+  description: 'Activates a future Jira sprint via the jira-actions:start-sprint action.'
+  tags:
+    - jira
+    - test
+spec:
+  owner: user:guest
+  type: jira-test
+  parameters:
+    - title: Start sprint
+      required:
+        - sprintId
+      properties:
+        sprintId:
+          title: 'Sprint ID'
+          type: string
+          description: 'The ID of the sprint, as returned by list-sprints'
+        startDate:
+          title: 'Start date'
+          type: string
+          description: 'The start as an ISO timestamp, if not set on the sprint'
+        endDate:
+          title: 'End date'
+          type: string
+          description: 'The end as an ISO timestamp, if not set on the sprint'
+        host:
+          title: 'Jira host'
+          type: string
+          description: 'Only needed when multiple Jira connections are configured'
+  steps:
+    - id: invoke
+      name: 'Start sprint'
+      action: jira-actions:start-sprint
+      input:
+        sprintId: ${{ parameters.sprintId }}
+        startDate: ${{ parameters.startDate }}
+        endDate: ${{ parameters.endDate }}
+        host: ${{ parameters.host }}
+  output:
+    text:
+      - title: Result
+        content: |
+          ```json
+          ${{ steps.invoke.output | dump(2) }}
+          ```

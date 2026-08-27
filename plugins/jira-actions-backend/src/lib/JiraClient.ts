@@ -1118,6 +1118,90 @@ export class JiraClient {
     }));
   }
 
+  async createSprint(options: {
+    boardId: string;
+    name: string;
+    startDate?: string;
+    endDate?: string;
+    goal?: string;
+  }): Promise<JiraSprint> {
+    const response = await this.request('POST', '/sprint', {
+      api: 'agile',
+      body: {
+        originBoardId: Number(options.boardId),
+        name: options.name,
+        ...(options.startDate !== undefined
+          ? { startDate: options.startDate }
+          : {}),
+        ...(options.endDate !== undefined ? { endDate: options.endDate } : {}),
+        ...(options.goal !== undefined ? { goal: options.goal } : {}),
+      },
+    });
+    if (!response.ok) {
+      await this.throwForResponse(
+        response,
+        `create sprint on Jira board ${options.boardId}`,
+      );
+    }
+    return this.toSprint((await response.json()) as JsonObject);
+  }
+
+  /**
+   * Partially updates a sprint; `state` transitions ('active'/'closed')
+   * start and complete the sprint, with Jira enforcing the lifecycle rules.
+   */
+  async updateSprint(
+    sprintId: string,
+    update: {
+      name?: string;
+      goal?: string;
+      startDate?: string;
+      endDate?: string;
+      state?: 'active' | 'closed';
+    },
+  ): Promise<JiraSprint> {
+    const body: JsonObject = {};
+    for (const key of [
+      'name',
+      'goal',
+      'startDate',
+      'endDate',
+      'state',
+    ] as const) {
+      if (update[key] !== undefined) {
+        body[key] = update[key]!;
+      }
+    }
+    const response = await this.request(
+      'POST',
+      `/sprint/${encodeURIComponent(sprintId)}`,
+      { api: 'agile', body },
+    );
+    if (!response.ok) {
+      await this.throwForResponse(response, `update Jira sprint ${sprintId}`);
+    }
+    return this.toSprint((await response.json()) as JsonObject);
+  }
+
+  private toSprint(body: JsonObject): JiraSprint {
+    const sprint = body as {
+      id: string | number;
+      name?: string;
+      state?: string;
+      startDate?: string;
+      endDate?: string;
+      goal?: string;
+    };
+    return {
+      id: String(sprint.id),
+      name: sprint.name ?? '',
+      state: sprint.state,
+      startDate: sprint.startDate,
+      endDate: sprint.endDate,
+      goal: sprint.goal || undefined,
+    };
+  }
+
   async getSprint(sprintId: string): Promise<JiraSprint> {
     const response = await this.request(
       'GET',
