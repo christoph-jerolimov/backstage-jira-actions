@@ -25,6 +25,12 @@ export function registerListLinkTypesAction(options: {
       destructive: false,
       idempotent: true,
     },
+    examples: [
+      {
+        title: 'Discover the available link types',
+        input: {},
+      },
+    ],
     schema: {
       input: z =>
         z.object({
@@ -84,6 +90,16 @@ export function registerLinkWorkItemsAction(options: {
       destructive: false,
       idempotent: true,
     },
+    examples: [
+      {
+        title: 'Mark an issue as blocking another',
+        input: {
+          issueKey: 'PROJ-123',
+          targetKey: 'PROJ-200',
+          linkType: 'blocks',
+        },
+      },
+    ],
     schema: {
       input: z =>
         z.object({

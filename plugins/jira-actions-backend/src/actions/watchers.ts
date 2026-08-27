@@ -30,6 +30,13 @@ function registerWatcherAction(options: {
       destructive: false,
       idempotent: true,
     },
+    examples: [
+      {
+        title:
+          mode === 'add' ? 'Watch an issue yourself' : 'Stop watching an issue',
+        input: { issueKey: 'PROJ-123', user: 'me' },
+      },
+    ],
     schema: {
       input: z =>
         z.object({

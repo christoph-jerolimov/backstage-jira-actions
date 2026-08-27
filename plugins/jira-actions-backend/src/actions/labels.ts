@@ -27,6 +27,12 @@ function registerLabelAction(options: {
       destructive: false,
       idempotent: true,
     },
+    examples: [
+      {
+        title: mode === 'add' ? 'Add a label' : 'Remove a label',
+        input: { issueKey: 'PROJ-123', label: 'needs-review' },
+      },
+    ],
     schema: {
       input: z =>
         z.object({

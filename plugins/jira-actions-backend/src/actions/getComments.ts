@@ -21,6 +21,14 @@ export function registerGetCommentsAction(options: {
       destructive: false,
       idempotent: true,
     },
+    examples: [
+      {
+        title: 'Read the comments',
+        input: {
+          issueKey: 'PROJ-123',
+        },
+      },
+    ],
     schema: {
       input: z =>
         z.object({

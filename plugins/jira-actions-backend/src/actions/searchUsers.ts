@@ -21,6 +21,14 @@ export function registerSearchUsersAction(options: {
       destructive: false,
       idempotent: true,
     },
+    examples: [
+      {
+        title: 'Find a user by name',
+        input: {
+          query: 'jane',
+        },
+      },
+    ],
     schema: {
       input: z =>
         z.object({

@@ -25,6 +25,14 @@ export function registerListIssueTypesAction(options: {
       destructive: false,
       idempotent: true,
     },
+    examples: [
+      {
+        title: 'List the issue types of a project',
+        input: {
+          projectKey: 'PROJ',
+        },
+      },
+    ],
     schema: {
       input: z =>
         z.object({

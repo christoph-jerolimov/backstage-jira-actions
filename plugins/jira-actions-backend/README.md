@@ -46,6 +46,9 @@ so that they can be invoked through the actions service and — via
 | `jira-actions:move-to-sprint`         | Moves up to fifty issues into a sprint.                                                          |
 | `jira-actions:move-to-backlog`        | Moves up to fifty issues out of their sprints into the backlog.                                  |
 
+Every action declares typed input/output schemas and at least one usage
+example, both of which flow to consumers such as the MCP endpoint.
+
 All actions accept an optional `host` input to select a specific Jira
 connection when more than one is configured; without it, the first configured
 Jira connection is used.

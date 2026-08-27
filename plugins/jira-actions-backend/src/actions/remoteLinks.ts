@@ -25,6 +25,16 @@ export function registerAddRemoteLinkAction(options: {
       destructive: false,
       idempotent: false,
     },
+    examples: [
+      {
+        title: 'Link a pull request',
+        input: {
+          issueKey: 'PROJ-123',
+          url: 'https://github.com/acme/shop/pull/42',
+          title: 'PR #42: Fix Safari login',
+        },
+      },
+    ],
     schema: {
       input: z =>
         z.object({
@@ -91,6 +101,14 @@ export function registerGetRemoteLinksAction(options: {
       destructive: false,
       idempotent: true,
     },
+    examples: [
+      {
+        title: 'Read the remote links',
+        input: {
+          issueKey: 'PROJ-123',
+        },
+      },
+    ],
     schema: {
       input: z =>
         z.object({

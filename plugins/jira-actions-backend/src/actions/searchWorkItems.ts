@@ -68,6 +68,21 @@ export function registerSearchWorkItemsAction(options: {
       destructive: false,
       idempotent: true,
     },
+    examples: [
+      {
+        title: 'Search by filters',
+        input: {
+          projectKey: 'PROJ',
+          status: 'In Progress',
+        },
+      },
+      {
+        title: 'Search with raw JQL',
+        input: {
+          jql: 'project = PROJ AND labels = checkout ORDER BY updated DESC',
+        },
+      },
+    ],
     schema: {
       input: z =>
         z.object({

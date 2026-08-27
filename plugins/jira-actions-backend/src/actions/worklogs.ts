@@ -25,6 +25,14 @@ export function registerGetWorklogsAction(options: {
       destructive: false,
       idempotent: true,
     },
+    examples: [
+      {
+        title: 'Read the logged work',
+        input: {
+          issueKey: 'PROJ-123',
+        },
+      },
+    ],
     schema: {
       input: z =>
         z.object({
@@ -129,6 +137,16 @@ export function registerAddWorklogAction(options: {
       destructive: false,
       idempotent: false,
     },
+    examples: [
+      {
+        title: 'Log time with a comment',
+        input: {
+          issueKey: 'PROJ-123',
+          timeSpent: '2h 30m',
+          comment: 'Pairing session',
+        },
+      },
+    ],
     schema: {
       input: z =>
         z.object({

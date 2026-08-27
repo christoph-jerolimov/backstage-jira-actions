@@ -54,6 +54,27 @@ export function registerCreateWorkItemsAction(options: {
       destructive: false,
       idempotent: false,
     },
+    examples: [
+      {
+        title: 'Break a feature into stories under a new epic',
+        input: {
+          projectKey: 'PROJ',
+          epic: {
+            summary: 'Checkout revamp',
+          },
+          items: [
+            {
+              issueType: 'Story',
+              summary: 'Redesign cart page',
+            },
+            {
+              issueType: 'Story',
+              summary: 'Add express checkout',
+            },
+          ],
+        },
+      },
+    ],
     schema: {
       input: z =>
         z.object({

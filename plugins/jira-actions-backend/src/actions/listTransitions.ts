@@ -21,6 +21,14 @@ export function registerListTransitionsAction(options: {
       destructive: false,
       idempotent: true,
     },
+    examples: [
+      {
+        title: 'See where an issue can move',
+        input: {
+          issueKey: 'PROJ-123',
+        },
+      },
+    ],
     schema: {
       input: z =>
         z.object({

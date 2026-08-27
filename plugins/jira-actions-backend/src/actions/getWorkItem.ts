@@ -21,6 +21,14 @@ export function registerGetWorkItemAction(options: {
       destructive: false,
       idempotent: true,
     },
+    examples: [
+      {
+        title: 'Read an issue',
+        input: {
+          issueKey: 'PROJ-123',
+        },
+      },
+    ],
     schema: {
       input: z =>
         z.object({

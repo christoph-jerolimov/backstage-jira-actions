@@ -21,6 +21,14 @@ export function registerDeleteWorkItemAction(options: {
       destructive: true,
       idempotent: false,
     },
+    examples: [
+      {
+        title: 'Delete an issue',
+        input: {
+          issueKey: 'PROJ-123',
+        },
+      },
+    ],
     schema: {
       input: z =>
         z.object({

@@ -37,6 +37,14 @@ export function registerGetSprintInsightsAction(options: {
       destructive: false,
       idempotent: true,
     },
+    examples: [
+      {
+        title: 'Summarize the sprint',
+        input: {
+          sprintId: '42',
+        },
+      },
+    ],
     schema: {
       input: z =>
         z.object({
