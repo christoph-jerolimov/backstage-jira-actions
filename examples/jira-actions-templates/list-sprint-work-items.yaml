@@ -1,0 +1,55 @@
+apiVersion: scaffolder.backstage.io/v1beta3
+kind: Template
+metadata:
+  name: 'jira-test-list-sprint-work-items'
+  title: 'Jira Test: List Sprint Work Items'
+  description: 'Lists the work items of a Jira sprint via the jira-actions:list-sprint-work-items action.'
+  tags:
+    - jira
+    - test
+spec:
+  owner: user:guest
+  type: jira-test
+  parameters:
+    - title: List sprint work items
+      required:
+        - sprintId
+      properties:
+        sprintId:
+          title: 'Sprint ID'
+          type: string
+          description: 'The ID of the sprint, as returned by list-sprints'
+        maxResults:
+          title: 'Maximum results'
+          type: number
+          description: 'Maximum number of items to return, default 50'
+        pageToken:
+          title: 'Page token'
+          type: string
+          description: 'An opaque cursor from a previous run to fetch the next page'
+        host:
+          title: 'Jira host'
+          type: string
+          description: 'Only needed when multiple Jira connections are configured'
+  steps:
+    - id: invoke
+      name: 'List sprint work items'
+      action: jira-actions:list-sprint-work-items
+      input:
+        sprintId: ${{ parameters.sprintId }}
+        maxResults: ${{ parameters.maxResults }}
+        pageToken: ${{ parameters.pageToken }}
+        host: ${{ parameters.host }}
+  output:
+    text:
+      - title: 'Work items'
+        content: |
+          | Key | Summary | Status | Type | Assignee |
+          | --- | --- | --- | --- | --- |
+          {% for i in steps.invoke.output.items %}| [${{ i.key }}](${{ i.url }}) | ${{ i.summary }} | ${{ i.status }} | ${{ i.issueType }} | ${{ i.assignee }} |
+          {% endfor %}
+      - title: 'JSON'
+        content: |
+          ```json
+          ${{ steps.invoke.output | dump(2) }}
+          ```

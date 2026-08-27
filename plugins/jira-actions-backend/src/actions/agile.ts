@@ -224,3 +224,146 @@ export function registerMoveToSprintAction(options: {
     },
   });
 }
+
+export function registerListSprintWorkItemsAction(options: {
+  actionsRegistry: ActionsRegistryService;
+  connections: JiraConnectionsReader;
+  permissions: PermissionsService;
+}) {
+  const { actionsRegistry, connections, permissions } = options;
+
+  actionsRegistry.register({
+    name: 'list-sprint-work-items',
+    title: 'List Jira Sprint Work Items',
+    description:
+      'Lists the work items (issues) of a sprint, with the same item shape as search-work-items.',
+    attributes: {
+      readOnly: true,
+      destructive: false,
+      idempotent: true,
+    },
+    schema: {
+      input: z =>
+        z.object({
+          sprintId: z
+            .string()
+            .describe('The ID of the sprint, as returned by list-sprints'),
+          maxResults: z
+            .number()
+            .int()
+            .min(1)
+            .max(100)
+            .optional()
+            .describe('Maximum number of items to return, default 50'),
+          pageToken: z
+            .string()
+            .optional()
+            .describe(
+              'An opaque cursor from a previous invocation to fetch the next page of items',
+            ),
+          host: z
+            .string()
+            .optional()
+            .describe(
+              'The Jira host to target when multiple Jira connections are configured; defaults to the first configured connection',
+            ),
+        }),
+      output: z =>
+        z.object({
+          items: z
+            .array(
+              z.object({
+                key: z.string(),
+                summary: z.string(),
+                status: z.string(),
+                issueType: z.string(),
+                url: z.string(),
+                assignee: z.string().optional(),
+              }),
+            )
+            .describe("The sprint's work items"),
+          nextPageToken: z
+            .string()
+            .optional()
+            .describe(
+              'Cursor for the next page of items; absent when no further items remain',
+            ),
+        }),
+    },
+    action: async ({ input, credentials }) => {
+      await assertPermission(
+        permissions,
+        jiraWorkItemReadPermission,
+        credentials,
+      );
+      const connection = connections.find({ host: input.host });
+      const client = new JiraClient(connection);
+      const { items, nextPageToken } = await client.listSprintIssues(
+        input.sprintId,
+        { maxResults: input.maxResults ?? 50, pageToken: input.pageToken },
+      );
+      return {
+        output: {
+          items: items.map(({ statusCategory, assigneeName, ...item }) => item),
+          nextPageToken,
+        },
+      };
+    },
+  });
+}
+
+export function registerMoveToBacklogAction(options: {
+  actionsRegistry: ActionsRegistryService;
+  connections: JiraConnectionsReader;
+  permissions: PermissionsService;
+}) {
+  const { actionsRegistry, connections, permissions } = options;
+
+  actionsRegistry.register({
+    name: 'move-to-backlog',
+    title: 'Move Jira Work Items to Backlog',
+    description:
+      'Moves up to fifty Jira work items (issues) out of their sprints into the backlog.',
+    attributes: {
+      readOnly: false,
+      destructive: false,
+      idempotent: true,
+    },
+    schema: {
+      input: z =>
+        z.object({
+          issueKeys: z
+            .array(z.string())
+            .min(1)
+            .max(50)
+            .describe('The keys of the issues to move, at most fifty'),
+          host: z
+            .string()
+            .optional()
+            .describe(
+              'The Jira host to target when multiple Jira connections are configured; defaults to the first configured connection',
+            ),
+        }),
+      output: z =>
+        z.object({
+          issueKeys: z
+            .array(z.string())
+            .describe('The keys of the moved issues'),
+        }),
+    },
+    action: async ({ input, logger, credentials }) => {
+      await assertPermission(
+        permissions,
+        jiraWorkItemWritePermission,
+        credentials,
+      );
+      const connection = connections.find({ host: input.host });
+      const client = new JiraClient(connection);
+      await client.moveToBacklog(input.issueKeys);
+      logger.info(
+        `Moved ${input.issueKeys.length} Jira issue(s) to the backlog`,
+      );
+      return { output: { issueKeys: input.issueKeys } };
+    },
+  });
+}

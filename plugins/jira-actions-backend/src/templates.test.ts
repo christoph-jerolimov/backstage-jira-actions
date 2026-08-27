@@ -42,6 +42,9 @@ const REQUIRED_INPUTS: Record<string, string[]> = {
   'remove-watcher': ['issueKey', 'user'],
   'list-boards': [],
   'list-sprints': ['boardId'],
+  'list-sprint-work-items': ['sprintId'],
+  'get-sprint-insights': ['sprintId'],
+  'move-to-backlog': ['issueKeys'],
   'move-to-sprint': ['sprintId', 'issueKeys'],
 };
 
@@ -85,6 +88,11 @@ const TABLE_OUTPUTS: Record<
     linkedKey: false,
   },
   'search-work-items': {
+    collection: 'items',
+    header: '| Key | Summary | Status | Type | Assignee |',
+    linkedKey: true,
+  },
+  'list-sprint-work-items': {
     collection: 'items',
     header: '| Key | Summary | Status | Type | Assignee |',
     linkedKey: true,
@@ -142,6 +150,10 @@ const SECTION_OUTPUTS: Record<
   string,
   { collection: string; mentions: string[] }
 > = {
+  'get-sprint-insights': {
+    collection: 'byStatus',
+    mentions: ['completedItems', 'totalItems', 'byIssueType', 'byAssignee'],
+  },
   'get-comments': {
     collection: 'comments',
     mentions: ['.author', '.created', '.body'],

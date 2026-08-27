@@ -8,6 +8,8 @@ import { registerAddCommentAction } from './actions/addComment';
 import {
   registerListBoardsAction,
   registerListSprintsAction,
+  registerListSprintWorkItemsAction,
+  registerMoveToBacklogAction,
   registerMoveToSprintAction,
 } from './actions/agile';
 import {
@@ -36,6 +38,7 @@ import {
 } from './actions/remoteLinks';
 import { registerRenameWorkItemAction } from './actions/renameWorkItem';
 import { registerSearchUsersAction } from './actions/searchUsers';
+import { registerGetSprintInsightsAction } from './actions/sprintInsights';
 import { registerSearchWorkItemsAction } from './actions/searchWorkItems';
 import { registerSetWorkItemParentAction } from './actions/setWorkItemParent';
 import { registerTransitionWorkItemAction } from './actions/transitionWorkItem';
@@ -115,7 +118,10 @@ export const jiraActionsPlugin = createBackendPlugin({
         registerRemoveWatcherAction({ ...common, catalog });
         registerListBoardsAction(common);
         registerListSprintsAction(common);
+        registerListSprintWorkItemsAction(common);
+        registerGetSprintInsightsAction(common);
         registerMoveToSprintAction(common);
+        registerMoveToBacklogAction(common);
       },
     });
   },

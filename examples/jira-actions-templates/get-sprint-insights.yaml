@@ -1,0 +1,57 @@
+apiVersion: scaffolder.backstage.io/v1beta3
+kind: Template
+metadata:
+  name: 'jira-test-get-sprint-insights'
+  title: 'Jira Test: Get Sprint Insights'
+  description: 'Summarizes a Jira sprint via the jira-actions:get-sprint-insights action.'
+  tags:
+    - jira
+    - test
+spec:
+  owner: user:guest
+  type: jira-test
+  parameters:
+    - title: Get sprint insights
+      required:
+        - sprintId
+      properties:
+        sprintId:
+          title: 'Sprint ID'
+          type: string
+          description: 'The ID of the sprint, as returned by list-sprints'
+        host:
+          title: 'Jira host'
+          type: string
+          description: 'Only needed when multiple Jira connections are configured'
+  steps:
+    - id: invoke
+      name: 'Get sprint insights'
+      action: jira-actions:get-sprint-insights
+      input:
+        sprintId: ${{ parameters.sprintId }}
+        host: ${{ parameters.host }}
+  output:
+    text:
+      - title: 'Sprint summary'
+        content: |
+          **${{ steps.invoke.output.sprint.name }}** (${{ steps.invoke.output.sprint.state }}) — ${{ steps.invoke.output.completedItems }} of ${{ steps.invoke.output.totalItems }} items done
+
+          {% if steps.invoke.output.sprint.goal %}Goal: ${{ steps.invoke.output.sprint.goal }}{% endif %}
+
+          | Status | Count |
+          | --- | --- |
+          {% for e in steps.invoke.output.byStatus %}| ${{ e.name }} | ${{ e.count }} |
+          {% endfor %}
+          | Type | Count |
+          | --- | --- |
+          {% for e in steps.invoke.output.byIssueType %}| ${{ e.name }} | ${{ e.count }} |
+          {% endfor %}
+          | Assignee | Count |
+          | --- | --- |
+          {% for e in steps.invoke.output.byAssignee %}| ${{ e.name }} | ${{ e.count }} |
+          {% endfor %}
+      - title: 'JSON'
+        content: |
+          ```json
+          ${{ steps.invoke.output | dump(2) }}
+          ```

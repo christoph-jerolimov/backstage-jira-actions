@@ -13,6 +13,8 @@ import { registerAddCommentAction } from './addComment';
 import {
   registerListBoardsAction,
   registerListSprintsAction,
+  registerListSprintWorkItemsAction,
+  registerMoveToBacklogAction,
   registerMoveToSprintAction,
 } from './agile';
 import {
@@ -38,6 +40,7 @@ import {
 } from './remoteLinks';
 import { registerRenameWorkItemAction } from './renameWorkItem';
 import { registerSearchUsersAction } from './searchUsers';
+import { registerGetSprintInsightsAction } from './sprintInsights';
 import { registerSearchWorkItemsAction } from './searchWorkItems';
 import { registerSetWorkItemParentAction } from './setWorkItemParent';
 import { registerTransitionWorkItemAction } from './transitionWorkItem';
@@ -153,6 +156,9 @@ function makeRegistry(
   registerListBoardsAction(common);
   registerListSprintsAction(common);
   registerMoveToSprintAction(common);
+  registerListSprintWorkItemsAction(common);
+  registerGetSprintInsightsAction(common);
+  registerMoveToBacklogAction(common);
   return actionsRegistry;
 }
 
@@ -2754,6 +2760,197 @@ describe('jira work item actions', () => {
     });
   });
 
+  describe('sprint views and insights', () => {
+    const sprintIssue = (
+      key: string,
+      status: string,
+      category: string,
+      type: string,
+      assignee?: string,
+    ) => ({
+      key,
+      fields: {
+        summary: `Issue ${key}`,
+        status: { name: status, statusCategory: { key: category } },
+        issuetype: { name: type },
+        ...(assignee
+          ? {
+              assignee: { accountId: `acc-${assignee}`, displayName: assignee },
+            }
+          : {}),
+      },
+    });
+
+    it('lists the work items of a sprint with paging', async () => {
+      let params: URLSearchParams | undefined;
+      server.use(
+        http.get(
+          'https://example.atlassian.net/rest/agile/1.0/sprint/42/issue',
+          ({ request }) => {
+            params = new URL(request.url).searchParams;
+            return HttpResponse.json({
+              issues: [sprintIssue('PROJ-1', 'To Do', 'new', 'Story', 'Jane')],
+              total: 2,
+            });
+          },
+        ),
+      );
+
+      const result: any = await makeRegistry([cloudConnection]).invoke({
+        id: 'test:list-sprint-work-items',
+        input: { sprintId: '42', maxResults: 1 },
+      });
+
+      expect(params?.get('startAt')).toBe('0');
+      expect(result.output.items).toEqual([
+        {
+          key: 'PROJ-1',
+          summary: 'Issue PROJ-1',
+          status: 'To Do',
+          issueType: 'Story',
+          url: 'https://example.atlassian.net/browse/PROJ-1',
+          assignee: 'acc-Jane',
+        },
+      ]);
+      expect(result.output.nextPageToken).toBe('1');
+    });
+
+    it('fails with NotFound for an unknown sprint', async () => {
+      server.use(
+        http.get(
+          'https://example.atlassian.net/rest/agile/1.0/sprint/99/issue',
+          () =>
+            HttpResponse.json(
+              { errorMessages: ['Sprint does not exist'] },
+              { status: 404 },
+            ),
+        ),
+      );
+
+      await expect(
+        makeRegistry([cloudConnection]).invoke({
+          id: 'test:list-sprint-work-items',
+          input: { sprintId: '99' },
+        }),
+      ).rejects.toThrow(/sprint 99.*status 404/);
+    });
+
+    it('moves issues to the backlog', async () => {
+      let received: any;
+      server.use(
+        http.post(
+          'https://example.atlassian.net/rest/agile/1.0/backlog/issue',
+          async ({ request }) => {
+            received = await request.json();
+            return new HttpResponse(null, { status: 204 });
+          },
+        ),
+      );
+
+      const result = await makeRegistry([cloudConnection]).invoke({
+        id: 'test:move-to-backlog',
+        input: { issueKeys: ['PROJ-1', 'PROJ-2'] },
+      });
+
+      expect(received).toEqual({ issues: ['PROJ-1', 'PROJ-2'] });
+      expect(result).toEqual({ output: { issueKeys: ['PROJ-1', 'PROJ-2'] } });
+    });
+
+    it('summarizes a sprint', async () => {
+      server.use(
+        http.get('https://example.atlassian.net/rest/agile/1.0/sprint/42', () =>
+          HttpResponse.json({
+            id: 42,
+            name: 'Sprint 12',
+            state: 'active',
+            goal: 'Ship it',
+          }),
+        ),
+        http.get(
+          'https://example.atlassian.net/rest/agile/1.0/sprint/42/issue',
+          () =>
+            HttpResponse.json({
+              issues: [
+                sprintIssue('PROJ-1', 'Done', 'done', 'Story', 'Jane'),
+                sprintIssue('PROJ-2', 'Done', 'done', 'Bug', 'Jane'),
+                sprintIssue('PROJ-3', 'In Progress', 'indeterminate', 'Story'),
+              ],
+              total: 3,
+            }),
+        ),
+      );
+
+      const result = await makeRegistry([cloudConnection]).invoke({
+        id: 'test:get-sprint-insights',
+        input: { sprintId: '42' },
+      });
+
+      expect(result).toEqual({
+        output: {
+          sprint: {
+            id: '42',
+            name: 'Sprint 12',
+            state: 'active',
+            goal: 'Ship it',
+          },
+          totalItems: 3,
+          completedItems: 2,
+          byStatus: [
+            { name: 'Done', count: 2 },
+            { name: 'In Progress', count: 1 },
+          ],
+          byIssueType: [
+            { name: 'Story', count: 2 },
+            { name: 'Bug', count: 1 },
+          ],
+          byAssignee: [
+            { name: 'Jane', count: 2 },
+            { name: 'Unassigned', count: 1 },
+          ],
+        },
+      });
+    });
+
+    it('summarizes an empty sprint', async () => {
+      server.use(
+        http.get('https://example.atlassian.net/rest/agile/1.0/sprint/42', () =>
+          HttpResponse.json({ id: 42, name: 'Sprint 12' }),
+        ),
+        http.get(
+          'https://example.atlassian.net/rest/agile/1.0/sprint/42/issue',
+          () => HttpResponse.json({ issues: [], total: 0 }),
+        ),
+      );
+
+      const result: any = await makeRegistry([cloudConnection]).invoke({
+        id: 'test:get-sprint-insights',
+        input: { sprintId: '42' },
+      });
+
+      expect(result.output.totalItems).toBe(0);
+      expect(result.output.completedItems).toBe(0);
+      expect(result.output.byStatus).toEqual([]);
+    });
+
+    it('fails with NotFound for insights on an unknown sprint', async () => {
+      server.use(
+        http.get('https://example.atlassian.net/rest/agile/1.0/sprint/99', () =>
+          HttpResponse.json(
+            { errorMessages: ['Sprint does not exist'] },
+            { status: 404 },
+          ),
+        ),
+      );
+
+      await expect(
+        makeRegistry([cloudConnection]).invoke({
+          id: 'test:get-sprint-insights',
+          input: { sprintId: '99' },
+        }),
+      ).rejects.toThrow(/sprint 99.*status 404/);
+    });
+  });
+
   describe('permission gating', () => {
     it('rejects a denied caller before any Jira call', async () => {
       let called = false;
@@ -2798,7 +2995,7 @@ describe('jira work item actions', () => {
     });
   });
 
-  it('lists all thirty-three actions with schemas and attributes', async () => {
+  it('lists all thirty-six actions with schemas and attributes', async () => {
     const { actions } = await makeRegistry([cloudConnection]).list();
     const ids = actions.map(a => a.id).sort();
     expect(ids).toEqual([
@@ -2813,6 +3010,7 @@ describe('jira work item actions', () => {
       'test:delete-work-item',
       'test:get-comments',
       'test:get-remote-links',
+      'test:get-sprint-insights',
       'test:get-work-item',
       'test:get-worklogs',
       'test:link-work-items',
@@ -2822,9 +3020,11 @@ describe('jira work item actions', () => {
       'test:list-issue-types',
       'test:list-link-types',
       'test:list-projects',
+      'test:list-sprint-work-items',
       'test:list-sprints',
       'test:list-transitions',
       'test:list-versions',
+      'test:move-to-backlog',
       'test:move-to-sprint',
       'test:remove-label',
       'test:remove-watcher',
@@ -2843,6 +3043,7 @@ describe('jira work item actions', () => {
     expect(readOnlyActions).toEqual([
       'test:get-comments',
       'test:get-remote-links',
+      'test:get-sprint-insights',
       'test:get-work-item',
       'test:get-worklogs',
       'test:list-boards',
@@ -2851,6 +3052,7 @@ describe('jira work item actions', () => {
       'test:list-issue-types',
       'test:list-link-types',
       'test:list-projects',
+      'test:list-sprint-work-items',
       'test:list-sprints',
       'test:list-transitions',
       'test:list-versions',
