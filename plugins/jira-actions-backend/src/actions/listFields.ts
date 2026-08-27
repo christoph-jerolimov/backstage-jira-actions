@@ -1,6 +1,7 @@
 import { PermissionsService } from '@backstage/backend-plugin-api';
 import { ActionsRegistryService } from '@backstage/backend-plugin-api/alpha';
 import { JiraClient } from '../lib/JiraClient';
+import { TtlCache } from '../lib/cache';
 import { JiraConnectionsReader } from '../lib/connections';
 import { assertPermission, jiraWorkItemReadPermission } from '../permissions';
 
@@ -8,8 +9,9 @@ export function registerListFieldsAction(options: {
   actionsRegistry: ActionsRegistryService;
   connections: JiraConnectionsReader;
   permissions: PermissionsService;
+  cache?: TtlCache;
 }) {
-  const { actionsRegistry, connections, permissions } = options;
+  const { actionsRegistry, connections, permissions, cache } = options;
 
   actionsRegistry.register({
     name: 'list-fields',
@@ -73,7 +75,7 @@ export function registerListFieldsAction(options: {
         credentials,
       );
       const connection = connections.find({ host: input.host });
-      const client = new JiraClient(connection);
+      const client = new JiraClient(connection, { cache });
       const fields = await client.listFields({ name: input.name });
       return { output: { fields } };
     },

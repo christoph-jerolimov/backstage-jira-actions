@@ -104,6 +104,9 @@ Usage notes:
   interpretation. With `adf`, the input is an ADF document (an object, or a
   JSON-encoded string) sent to Jira verbatim — Jira Cloud only. On Jira
   Data Center strings pass through unchanged and `adf` is rejected.
+- Discovery caching: link types and the field catalog are cached per
+  connection for sixty seconds (also serving `link-work-items`' internal
+  type resolution), so repeated discovery calls don't hit Jira.
 - Rate limits: a Jira 429 response is retried up to two times, honoring
   the `Retry-After` header (capped at ten seconds per wait); a request
   still rate-limited afterwards fails with an explicit rate-limit error.
