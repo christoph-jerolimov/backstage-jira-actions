@@ -17,6 +17,8 @@ spec:
     - ./get-comments.yaml
     - ./add-label.yaml
     - ./remove-label.yaml
+    - ./add-remote-link.yaml
+    - ./get-remote-links.yaml
     - ./link-work-items.yaml
     - ./list-link-types.yaml
     - ./list-transitions.yaml

@@ -1,0 +1,48 @@
+apiVersion: scaffolder.backstage.io/v1beta3
+kind: Template
+metadata:
+  name: 'jira-test-get-remote-links'
+  title: 'Jira Test: Get Remote Links'
+  description: 'Reads the web links attached to a Jira work item via the jira-actions:get-remote-links action.'
+  tags:
+    - jira
+    - test
+spec:
+  owner: user:guest
+  type: jira-test
+  parameters:
+    - title: Get remote links
+      required:
+        - issueKey
+      properties:
+        issueKey:
+          title: 'Issue key'
+          type: string
+          description: 'The key of the issue, e.g. PROJ-123'
+        host:
+          title: 'Jira host'
+          type: string
+          description: 'Only needed when multiple Jira connections are configured'
+  steps:
+    - id: invoke
+      name: 'Get remote links'
+      action: jira-actions:get-remote-links
+      input:
+        issueKey: ${{ parameters.issueKey }}
+        host: ${{ parameters.host }}
+  output:
+    links:
+      - title: Open issue
+        url: ${{ steps.invoke.output.url }}
+    text:
+      - title: 'Remote links'
+        content: |
+          | Title | URL |
+          | --- | --- |
+          {% for l in steps.invoke.output.remoteLinks %}| [${{ l.title }}](${{ l.url }}) | ${{ l.url }} |
+          {% endfor %}
+      - title: 'JSON'
+        content: |
+          ```json
+          ${{ steps.invoke.output | dump(2) }}
+          ```

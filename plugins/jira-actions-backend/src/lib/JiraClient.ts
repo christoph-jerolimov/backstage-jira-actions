@@ -121,6 +121,12 @@ export type JiraProjectComponent = {
   lead?: string;
 };
 
+export type JiraRemoteLink = {
+  id: string;
+  title: string;
+  url: string;
+};
+
 export type JiraSearchItem = {
   key: string;
   summary: string;
@@ -714,6 +720,47 @@ export class JiraClient {
       name?: string;
     };
     return { id: String(body.id), name: body.name ?? options.name };
+  }
+
+  async addRemoteLink(
+    issueKey: string,
+    link: { url: string; title: string },
+  ): Promise<{ remoteLinkId: string }> {
+    const response = await this.request(
+      'POST',
+      `/issue/${encodeURIComponent(issueKey)}/remotelink`,
+      { body: { object: { url: link.url, title: link.title } } },
+    );
+    if (!response.ok) {
+      await this.throwForResponse(
+        response,
+        `add remote link to Jira issue ${issueKey}`,
+      );
+    }
+    const body = (await response.json()) as { id: string | number };
+    return { remoteLinkId: String(body.id) };
+  }
+
+  async getRemoteLinks(issueKey: string): Promise<JiraRemoteLink[]> {
+    const response = await this.request(
+      'GET',
+      `/issue/${encodeURIComponent(issueKey)}/remotelink`,
+    );
+    if (!response.ok) {
+      await this.throwForResponse(
+        response,
+        `get remote links of Jira issue ${issueKey}`,
+      );
+    }
+    const body = (await response.json()) as Array<{
+      id: string | number;
+      object?: { url?: string; title?: string };
+    }>;
+    return body.map(link => ({
+      id: String(link.id),
+      title: link.object?.title ?? '',
+      url: link.object?.url ?? '',
+    }));
   }
 
   async searchUsers(

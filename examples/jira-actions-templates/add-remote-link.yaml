@@ -1,0 +1,54 @@
+apiVersion: scaffolder.backstage.io/v1beta3
+kind: Template
+metadata:
+  name: 'jira-test-add-remote-link'
+  title: 'Jira Test: Add Remote Link'
+  description: 'Attaches a titled web link to a Jira work item via the jira-actions:add-remote-link action.'
+  tags:
+    - jira
+    - test
+spec:
+  owner: user:guest
+  type: jira-test
+  parameters:
+    - title: Add remote link
+      required:
+        - issueKey
+        - url
+        - title
+      properties:
+        issueKey:
+          title: 'Issue key'
+          type: string
+          description: 'The key of the issue, e.g. PROJ-123'
+        url:
+          title: 'URL'
+          type: string
+          description: 'The link target URL'
+        title:
+          title: 'Title'
+          type: string
+          description: 'The link text shown in Jira'
+        host:
+          title: 'Jira host'
+          type: string
+          description: 'Only needed when multiple Jira connections are configured'
+  steps:
+    - id: invoke
+      name: 'Add remote link'
+      action: jira-actions:add-remote-link
+      input:
+        issueKey: ${{ parameters.issueKey }}
+        url: ${{ parameters.url }}
+        title: ${{ parameters.title }}
+        host: ${{ parameters.host }}
+  output:
+    links:
+      - title: Open issue
+        url: ${{ steps.invoke.output.url }}
+    text:
+      - title: Result
+        content: |
+          ```json
+          ${{ steps.invoke.output | dump(2) }}
+          ```

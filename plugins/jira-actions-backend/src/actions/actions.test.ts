@@ -28,6 +28,10 @@ import { registerListFieldsAction } from './listFields';
 import { registerListIssueTypesAction } from './listIssueTypes';
 import { registerListProjectsAction } from './listProjects';
 import { registerListTransitionsAction } from './listTransitions';
+import {
+  registerAddRemoteLinkAction,
+  registerGetRemoteLinksAction,
+} from './remoteLinks';
 import { registerRenameWorkItemAction } from './renameWorkItem';
 import { registerSearchUsersAction } from './searchUsers';
 import { registerSearchWorkItemsAction } from './searchWorkItems';
@@ -125,6 +129,8 @@ function makeRegistry(
     permissions,
   });
   const common = { actionsRegistry, connections: reader, permissions };
+  registerAddRemoteLinkAction(common);
+  registerGetRemoteLinksAction(common);
   registerListVersionsAction({ ...common, catalog });
   registerListComponentsAction({ ...common, catalog });
   registerCreateVersionAction({ ...common, catalog });
@@ -2582,6 +2588,94 @@ describe('jira work item actions', () => {
     });
   });
 
+  describe('remote links', () => {
+    it('attaches a titled web link to an issue', async () => {
+      let received: any;
+      server.use(
+        http.post(
+          'https://example.atlassian.net/rest/api/3/issue/PROJ-1/remotelink',
+          async ({ request }) => {
+            received = await request.json();
+            return HttpResponse.json({ id: 10000 }, { status: 201 });
+          },
+        ),
+      );
+
+      const result = await makeRegistry([cloudConnection]).invoke({
+        id: 'test:add-remote-link',
+        input: {
+          issueKey: 'PROJ-1',
+          url: 'https://backstage.example.com/catalog/default/component/my-service',
+          title: 'Backstage: my-service',
+        },
+      });
+
+      expect(received).toEqual({
+        object: {
+          url: 'https://backstage.example.com/catalog/default/component/my-service',
+          title: 'Backstage: my-service',
+        },
+      });
+      expect(result).toEqual({
+        output: {
+          key: 'PROJ-1',
+          remoteLinkId: '10000',
+          url: 'https://example.atlassian.net/browse/PROJ-1',
+        },
+      });
+    });
+
+    it('reads the remote links of an issue', async () => {
+      server.use(
+        http.get(
+          'https://example.atlassian.net/rest/api/3/issue/PROJ-1/remotelink',
+          () =>
+            HttpResponse.json([
+              {
+                id: 10000,
+                object: { url: 'https://pr.example.com/42', title: 'PR #42' },
+              },
+            ]),
+        ),
+      );
+
+      const result = await makeRegistry([cloudConnection]).invoke({
+        id: 'test:get-remote-links',
+        input: { issueKey: 'PROJ-1' },
+      });
+
+      expect(result).toEqual({
+        output: {
+          key: 'PROJ-1',
+          url: 'https://example.atlassian.net/browse/PROJ-1',
+          remoteLinks: [
+            { id: '10000', title: 'PR #42', url: 'https://pr.example.com/42' },
+          ],
+        },
+      });
+    });
+
+    it('fails with NotFound for an unknown issue', async () => {
+      server.use(
+        http.post(
+          'https://example.atlassian.net/rest/api/3/issue/PROJ-999/remotelink',
+          () =>
+            HttpResponse.json(
+              { errorMessages: ['Issue does not exist'] },
+              { status: 404 },
+            ),
+        ),
+      );
+
+      await expect(
+        makeRegistry([cloudConnection]).invoke({
+          id: 'test:add-remote-link',
+          input: { issueKey: 'PROJ-999', url: 'https://x', title: 'x' },
+        }),
+      ).rejects.toThrow(/status 404.*Issue does not exist/);
+    });
+  });
+
   describe('permission gating', () => {
     it('rejects a denied caller before any Jira call', async () => {
       let called = false;
@@ -2626,18 +2720,20 @@ describe('jira work item actions', () => {
     });
   });
 
-  it('lists all twenty-nine actions with schemas and attributes', async () => {
+  it('lists all thirty-one actions with schemas and attributes', async () => {
     const { actions } = await makeRegistry([cloudConnection]).list();
     const ids = actions.map(a => a.id).sort();
     expect(ids).toEqual([
       'test:add-comment',
       'test:add-label',
+      'test:add-remote-link',
       'test:add-watcher',
       'test:add-worklog',
       'test:create-version',
       'test:create-work-item',
       'test:delete-work-item',
       'test:get-comments',
+      'test:get-remote-links',
       'test:get-work-item',
       'test:get-worklogs',
       'test:link-work-items',
@@ -2666,6 +2762,7 @@ describe('jira work item actions', () => {
       .sort();
     expect(readOnlyActions).toEqual([
       'test:get-comments',
+      'test:get-remote-links',
       'test:get-work-item',
       'test:get-worklogs',
       'test:list-boards',
