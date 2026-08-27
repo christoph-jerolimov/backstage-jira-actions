@@ -1783,3 +1783,112 @@ describe('JiraClient versions and components', () => {
     expect(issue.components).toEqual(['backend']);
   });
 });
+
+describe('JiraClient rate limit retries', () => {
+  const server = setupServer();
+  registerMswTestHooks(server);
+
+  const withSleep = () => {
+    const waits: number[] = [];
+    const client = new JiraClient(cloudConnection, {
+      sleep: async ms => {
+        waits.push(ms);
+      },
+    });
+    return { client, waits };
+  };
+
+  it('retries a 429 honoring Retry-After seconds and succeeds', async () => {
+    let calls = 0;
+    server.use(
+      http.get('https://example.atlassian.net/rest/api/3/issueLinkType', () => {
+        calls += 1;
+        if (calls === 1) {
+          return new HttpResponse(null, {
+            status: 429,
+            headers: { 'Retry-After': '3' },
+          });
+        }
+        return HttpResponse.json({ issueLinkTypes: [] });
+      }),
+    );
+
+    const { client, waits } = withSleep();
+    expect(await client.listLinkTypes()).toEqual([]);
+    expect(calls).toBe(2);
+    expect(waits).toEqual([3000]);
+  });
+
+  it('caps excessive Retry-After values at ten seconds', async () => {
+    let calls = 0;
+    server.use(
+      http.get('https://example.atlassian.net/rest/api/3/issueLinkType', () => {
+        calls += 1;
+        if (calls === 1) {
+          return new HttpResponse(null, {
+            status: 429,
+            headers: { 'Retry-After': '9999' },
+          });
+        }
+        return HttpResponse.json({ issueLinkTypes: [] });
+      }),
+    );
+
+    const { client, waits } = withSleep();
+    await client.listLinkTypes();
+    expect(waits).toEqual([10000]);
+  });
+
+  it('falls back to a short backoff without a Retry-After header', async () => {
+    let calls = 0;
+    server.use(
+      http.get('https://example.atlassian.net/rest/api/3/issueLinkType', () => {
+        calls += 1;
+        if (calls <= 2) {
+          return new HttpResponse(null, { status: 429 });
+        }
+        return HttpResponse.json({ issueLinkTypes: [] });
+      }),
+    );
+
+    const { client, waits } = withSleep();
+    await client.listLinkTypes();
+    expect(calls).toBe(3);
+    expect(waits).toEqual([1000, 2000]);
+  });
+
+  it('fails with a rate limit error after exhausting retries', async () => {
+    let calls = 0;
+    server.use(
+      http.get('https://example.atlassian.net/rest/api/3/issueLinkType', () => {
+        calls += 1;
+        return new HttpResponse(null, {
+          status: 429,
+          headers: { 'Retry-After': '1' },
+        });
+      }),
+    );
+
+    const { client, waits } = withSleep();
+    await expect(client.listLinkTypes()).rejects.toThrow(
+      /Jira rate-limited the request after retries/,
+    );
+    expect(calls).toBe(3);
+    expect(waits).toEqual([1000, 1000]);
+  });
+
+  it('does not retry other statuses', async () => {
+    let calls = 0;
+    server.use(
+      http.get('https://example.atlassian.net/rest/api/3/issueLinkType', () => {
+        calls += 1;
+        return HttpResponse.json({ errorMessages: ['boom'] }, { status: 500 });
+      }),
+    );
+
+    const { client, waits } = withSleep();
+    await expect(client.listLinkTypes()).rejects.toThrow(/status 500/);
+    expect(calls).toBe(1);
+    expect(waits).toEqual([]);
+  });
+});
