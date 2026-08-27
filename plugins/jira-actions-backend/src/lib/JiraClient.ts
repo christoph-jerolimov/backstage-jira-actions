@@ -205,8 +205,19 @@ const SEARCH_FIELDS = ['summary', 'status', 'issuetype', 'assignee'];
  * A minimal Jira REST API client bound to a resolved Jira connection.
  * Uses API v3 for Jira Cloud and v2 for Jira Data Center.
  */
+const MAX_RATE_LIMIT_RETRIES = 2;
+const MAX_RETRY_DELAY_MS = 10_000;
+
 export class JiraClient {
-  constructor(private readonly connection: JiraConnection) {}
+  private readonly sleep: (ms: number) => Promise<void>;
+
+  constructor(
+    private readonly connection: JiraConnection,
+    options?: { sleep?: (ms: number) => Promise<void> },
+  ) {
+    this.sleep =
+      options?.sleep ?? (ms => new Promise(resolve => setTimeout(resolve, ms)));
+  }
 
   private get isCloud(): boolean {
     return this.connection.product === 'cloud';
@@ -1506,7 +1517,7 @@ export class JiraClient {
     for (const [name, value] of Object.entries(options?.query ?? {})) {
       url.searchParams.set(name, value);
     }
-    return fetch(url, {
+    const init = {
       method,
       headers: {
         Authorization: this.authorizationHeader,
@@ -1516,7 +1527,35 @@ export class JiraClient {
       ...(options?.body !== undefined
         ? { body: JSON.stringify(options.body) }
         : {}),
-    });
+    };
+
+    // Jira Cloud rate-limits with 429 + Retry-After; retry a bounded number
+    // of times so agent loops survive bursts. Nothing else is retried.
+    for (let attempt = 1; ; attempt++) {
+      const response = await fetch(url, init);
+      if (response.status !== 429 || attempt > MAX_RATE_LIMIT_RETRIES) {
+        return response;
+      }
+      await this.sleep(
+        this.retryDelayMs(response.headers.get('retry-after'), attempt),
+      );
+    }
+  }
+
+  private retryDelayMs(retryAfter: string | null, attempt: number): number {
+    if (retryAfter) {
+      if (/^\d+$/.test(retryAfter.trim())) {
+        return Math.min(
+          parseInt(retryAfter.trim(), 10) * 1000,
+          MAX_RETRY_DELAY_MS,
+        );
+      }
+      const date = Date.parse(retryAfter);
+      if (!Number.isNaN(date)) {
+        return Math.min(Math.max(date - Date.now(), 0), MAX_RETRY_DELAY_MS);
+      }
+    }
+    return 1000 * attempt;
   }
 
   private async throwForResponse(
@@ -1544,6 +1583,11 @@ export class JiraClient {
     const message = `Failed to ${action}, status ${response.status}${
       details ? `: ${details}` : ''
     }`;
+    if (response.status === 429) {
+      throw new Error(
+        `Jira rate-limited the request after retries: ${message}`,
+      );
+    }
     switch (response.status) {
       case 400:
         throw new InputError(message);

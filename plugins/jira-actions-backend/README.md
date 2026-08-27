@@ -101,6 +101,9 @@ Usage notes:
   interpretation. With `adf`, the input is an ADF document (an object, or a
   JSON-encoded string) sent to Jira verbatim — Jira Cloud only. On Jira
   Data Center strings pass through unchanged and `adf` is rejected.
+- Rate limits: a Jira 429 response is retried up to two times, honoring
+  the `Retry-After` header (capped at ten seconds per wait); a request
+  still rate-limited afterwards fails with an explicit rate-limit error.
 - `get-work-item` renders Cloud descriptions back per `descriptionFormat`:
   Markdown by default, the raw ADF document for `adf`, or plain text for
   `text` (ADF nodes outside the Markdown subset, such as tables and
