@@ -1,0 +1,96 @@
+apiVersion: scaffolder.backstage.io/v1beta3
+kind: Template
+metadata:
+  name: 'jira-test-create-work-items'
+  title: 'Jira Test: Create Work Items'
+  description: 'Creates up to fifty Jira work items in one call, optionally under a new epic, via the jira-actions:create-work-items action.'
+  tags:
+    - jira
+    - test
+spec:
+  owner: user:guest
+  type: jira-test
+  parameters:
+    - title: Create work items
+      required:
+        - items
+      properties:
+        projectKey:
+          title: 'Project key'
+          type: string
+          description: 'The Jira project key, e.g. PROJ; provide either this or a catalog entity'
+        entityRef:
+          title: 'Catalog entity'
+          type: string
+          description: 'A catalog entity whose jira/project-key annotation identifies the project; alternative to the project key'
+          ui:field: EntityPicker
+        epic:
+          title: 'Epic'
+          type: object
+          description: 'A work item to create first and use as the parent of every item; cannot be combined with a parent key'
+          properties:
+            summary:
+              title: 'Epic summary'
+              type: string
+              description: 'The epic summary (title)'
+            issueType:
+              title: 'Epic issue type'
+              type: string
+              description: 'The epic issue type name, default Epic'
+            description:
+              title: 'Epic description'
+              type: string
+              description: 'The Markdown description of the epic'
+        parentKey:
+          title: 'Parent key'
+          type: string
+          description: 'An existing parent issue for every item; cannot be combined with an epic'
+        items:
+          title: 'Work items'
+          type: array
+          description: 'The work items to create, at most fifty'
+          items:
+            type: object
+            properties:
+              issueType:
+                title: 'Issue type'
+                type: string
+                description: 'The issue type name, e.g. Story'
+              summary:
+                title: 'Summary'
+                type: string
+                description: 'The issue summary (title)'
+              description:
+                title: 'Description'
+                type: string
+                description: 'The Markdown description'
+        host:
+          title: 'Jira host'
+          type: string
+          description: 'Only needed when multiple Jira connections are configured'
+  steps:
+    - id: invoke
+      name: 'Create work items'
+      action: jira-actions:create-work-items
+      input:
+        projectKey: ${{ parameters.projectKey }}
+        entityRef: ${{ parameters.entityRef }}
+        epic: ${{ parameters.epic }}
+        parentKey: ${{ parameters.parentKey }}
+        items: ${{ parameters.items }}
+        host: ${{ parameters.host }}
+  output:
+    text:
+      - title: 'Created work items'
+        content: |
+          {% if steps.invoke.output.parent %}Epic: [${{ steps.invoke.output.parent.key }}](${{ steps.invoke.output.parent.url }})
+
+          {% endif %}| Key |
+          | --- |
+          {% for i in steps.invoke.output.items %}| [${{ i.key }}](${{ i.url }}) |
+          {% endfor %}
+      - title: 'JSON'
+        content: |
+          ```json
+          ${{ steps.invoke.output | dump(2) }}
+          ```

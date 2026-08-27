@@ -160,8 +160,9 @@ connections:
 
 ## Catalog annotations
 
-The project-scoped actions (`create-work-item`, `search-work-items`,
-`list-issue-types`, `list-versions`, `list-components`, `create-version`)
+The project-scoped actions (`create-work-item`, `create-work-items`,
+`search-work-items`, `list-issue-types`, `list-versions`,
+`list-components`, `create-version`)
 accept an `entityRef` input (e.g.
 `component:default/my-service`) as an alternative to `projectKey` — provide
 exactly one of the two. The entity is looked up in the software catalog with
