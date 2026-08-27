@@ -7,9 +7,27 @@ spec:
   targets:
     - ./create-work-item.yaml
     - ./update-work-item.yaml
+    - ./rename-work-item.yaml
+    - ./set-work-item-parent.yaml
+    - ./delete-work-item.yaml
     - ./get-work-item.yaml
     - ./search-work-items.yaml
+    - ./search-users.yaml
     - ./add-comment.yaml
+    - ./get-comments.yaml
+    - ./add-label.yaml
+    - ./remove-label.yaml
+    - ./link-work-items.yaml
+    - ./list-link-types.yaml
+    - ./list-transitions.yaml
     - ./transition-work-item.yaml
     - ./list-projects.yaml
     - ./list-issue-types.yaml
+    - ./list-fields.yaml
+    - ./get-worklogs.yaml
+    - ./add-worklog.yaml
+    - ./add-watcher.yaml
+    - ./remove-watcher.yaml
+    - ./list-boards.yaml
+    - ./list-sprints.yaml
+    - ./move-to-sprint.yaml

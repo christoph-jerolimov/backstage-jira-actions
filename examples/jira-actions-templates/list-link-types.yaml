@@ -1,0 +1,38 @@
+apiVersion: scaffolder.backstage.io/v1beta3
+kind: Template
+metadata:
+  name: 'jira-test-list-link-types'
+  title: 'Jira Test: List Link Types'
+  description: 'Lists the issue link types available on the Jira instance via the jira-actions:list-link-types action.'
+  tags:
+    - jira
+    - test
+spec:
+  owner: user:guest
+  type: jira-test
+  parameters:
+    - title: List link types
+      properties:
+        host:
+          title: 'Jira host'
+          type: string
+          description: 'Only needed when multiple Jira connections are configured'
+  steps:
+    - id: invoke
+      name: 'List link types'
+      action: jira-actions:list-link-types
+      input:
+        host: ${{ parameters.host }}
+  output:
+    text:
+      - title: 'Link types'
+        content: |
+          | Name | Outward | Inward |
+          | --- | --- | --- |
+          {% for t in steps.invoke.output.linkTypes %}| ${{ t.name }} | ${{ t.outward }} | ${{ t.inward }} |
+          {% endfor %}
+      - title: 'JSON'
+        content: |
+          ```json
+          ${{ steps.invoke.output | dump(2) }}
+          ```

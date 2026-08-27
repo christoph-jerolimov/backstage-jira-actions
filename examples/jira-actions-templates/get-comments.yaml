@@ -1,0 +1,70 @@
+apiVersion: scaffolder.backstage.io/v1beta3
+kind: Template
+metadata:
+  name: 'jira-test-get-comments'
+  title: 'Jira Test: Get Comments'
+  description: 'Reads the comments of a Jira work item via the jira-actions:get-comments action.'
+  tags:
+    - jira
+    - test
+spec:
+  owner: user:guest
+  type: jira-test
+  parameters:
+    - title: Get comments
+      required:
+        - issueKey
+      properties:
+        issueKey:
+          title: 'Issue key'
+          type: string
+          description: 'The key of the issue to read, e.g. PROJ-123'
+        bodyFormat:
+          title: 'Body format'
+          type: string
+          description: 'How to render each comment body: markdown (default), adf, or text'
+          enum:
+            - markdown
+            - adf
+            - text
+        maxResults:
+          title: 'Maximum results'
+          type: number
+          description: 'Maximum number of comments to return, default 50'
+        pageToken:
+          title: 'Page token'
+          type: string
+          description: 'An opaque cursor from a previous run to fetch the next page'
+        host:
+          title: 'Jira host'
+          type: string
+          description: 'Only needed when multiple Jira connections are configured'
+  steps:
+    - id: invoke
+      name: 'Get comments'
+      action: jira-actions:get-comments
+      input:
+        issueKey: ${{ parameters.issueKey }}
+        bodyFormat: ${{ parameters.bodyFormat }}
+        maxResults: ${{ parameters.maxResults }}
+        pageToken: ${{ parameters.pageToken }}
+        host: ${{ parameters.host }}
+  output:
+    links:
+      - title: Open issue
+        url: ${{ steps.invoke.output.url }}
+    text:
+      - title: 'Comments'
+        content: |
+          {% for c in steps.invoke.output.comments %}**${{ c.author or 'Unknown' }}** — ${{ c.created }}
+
+          ${{ c.body }}
+
+          ---
+
+          {% endfor %}
+      - title: 'JSON'
+        content: |
+          ```json
+          ${{ steps.invoke.output | dump(2) }}
+          ```

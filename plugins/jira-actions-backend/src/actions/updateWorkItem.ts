@@ -1,21 +1,27 @@
+import { PermissionsService } from '@backstage/backend-plugin-api';
 import { ActionsRegistryService } from '@backstage/backend-plugin-api/alpha';
 import { InputError } from '@backstage/errors';
 import { JiraClient } from '../lib/JiraClient';
 import { JiraConnectionsReader } from '../lib/connections';
+import { assertPermission, jiraWorkItemWritePermission } from '../permissions';
 
 const UPDATABLE_FIELDS = [
   'summary',
   'description',
   'labels',
+  'addLabels',
+  'removeLabels',
   'assignee',
   'issueType',
+  'customFields',
 ] as const;
 
 export function registerUpdateWorkItemAction(options: {
   actionsRegistry: ActionsRegistryService;
   connections: JiraConnectionsReader;
+  permissions: PermissionsService;
 }) {
-  const { actionsRegistry, connections } = options;
+  const { actionsRegistry, connections, permissions } = options;
 
   actionsRegistry.register({
     name: 'update-work-item',
@@ -53,6 +59,18 @@ export function registerUpdateWorkItemAction(options: {
             .array(z.string())
             .optional()
             .describe('The full new list of labels, replacing existing labels'),
+          addLabels: z
+            .array(z.string())
+            .optional()
+            .describe(
+              'Labels to add to the existing labels; cannot be combined with "labels"',
+            ),
+          removeLabels: z
+            .array(z.string())
+            .optional()
+            .describe(
+              'Labels to remove from the existing labels; cannot be combined with "labels"',
+            ),
           assignee: z
             .string()
             .optional()
@@ -63,6 +81,12 @@ export function registerUpdateWorkItemAction(options: {
             .string()
             .optional()
             .describe('The new issue type name, e.g. "Story", "Bug" or "Task"'),
+          customFields: z
+            .record(z.any())
+            .optional()
+            .describe(
+              'New values for additional issue fields keyed by Jira field ID (e.g. "customfield_10020", discoverable via list-fields), passed to Jira verbatim',
+            ),
           host: z
             .string()
             .optional()
@@ -76,7 +100,12 @@ export function registerUpdateWorkItemAction(options: {
           url: z.string().describe('A browseable URL of the updated issue'),
         }),
     },
-    action: async ({ input, logger }) => {
+    action: async ({ input, credentials, logger }) => {
+      await assertPermission(
+        permissions,
+        jiraWorkItemWritePermission,
+        credentials,
+      );
       if (UPDATABLE_FIELDS.every(field => input[field] === undefined)) {
         throw new InputError(
           `At least one field to update must be provided, one of: ${UPDATABLE_FIELDS.join(
@@ -84,9 +113,25 @@ export function registerUpdateWorkItemAction(options: {
           )}`,
         );
       }
+      if (
+        input.labels !== undefined &&
+        (input.addLabels !== undefined || input.removeLabels !== undefined)
+      ) {
+        throw new InputError(
+          'The "labels" field replaces all labels and cannot be combined with "addLabels" or "removeLabels"',
+        );
+      }
       const connection = connections.find({ host: input.host });
       const client = new JiraClient(connection);
-      const result = await client.updateIssue(input.issueKey, input);
+      const labelEdits =
+        input.addLabels !== undefined || input.removeLabels !== undefined
+          ? { add: input.addLabels, remove: input.removeLabels }
+          : undefined;
+      const result = await client.updateIssue(
+        input.issueKey,
+        input,
+        labelEdits,
+      );
       logger.info(`Updated Jira issue ${result.key} on ${connection.host}`);
       return { output: result };
     },

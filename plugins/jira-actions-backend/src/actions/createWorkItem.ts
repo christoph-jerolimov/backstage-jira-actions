@@ -1,16 +1,19 @@
+import { PermissionsService } from '@backstage/backend-plugin-api';
 import { ActionsRegistryService } from '@backstage/backend-plugin-api/alpha';
 import { InputError } from '@backstage/errors';
 import { CatalogService } from '@backstage/plugin-catalog-node';
 import { JiraClient } from '../lib/JiraClient';
 import { JiraConnectionsReader } from '../lib/connections';
 import { resolveEntityProject } from '../lib/entityProject';
+import { assertPermission, jiraWorkItemWritePermission } from '../permissions';
 
 export function registerCreateWorkItemAction(options: {
   actionsRegistry: ActionsRegistryService;
   connections: JiraConnectionsReader;
+  permissions: PermissionsService;
   catalog: CatalogService;
 }) {
-  const { actionsRegistry, connections, catalog } = options;
+  const { actionsRegistry, connections, permissions, catalog } = options;
 
   actionsRegistry.register({
     name: 'create-work-item',
@@ -71,6 +74,12 @@ export function registerCreateWorkItemAction(options: {
             .describe(
               'The key of a parent issue, for sub-tasks or issues under an epic',
             ),
+          customFields: z
+            .record(z.any())
+            .optional()
+            .describe(
+              'Additional issue fields keyed by Jira field ID (e.g. "customfield_10020", discoverable via list-fields), passed to Jira verbatim',
+            ),
           host: z
             .string()
             .optional()
@@ -88,6 +97,11 @@ export function registerCreateWorkItemAction(options: {
         }),
     },
     action: async ({ input, credentials, logger }) => {
+      await assertPermission(
+        permissions,
+        jiraWorkItemWritePermission,
+        credentials,
+      );
       if (
         (input.projectKey === undefined) ===
         (input.entityRef === undefined)

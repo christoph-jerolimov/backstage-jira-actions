@@ -41,6 +41,18 @@ spec:
           description: 'The full new list of labels, replacing existing labels'
           items:
             type: string
+        addLabels:
+          title: 'Add labels'
+          type: array
+          description: 'Labels to add to the existing labels; cannot be combined with Labels'
+          items:
+            type: string
+        removeLabels:
+          title: 'Remove labels'
+          type: array
+          description: 'Labels to remove from the existing labels; cannot be combined with Labels'
+          items:
+            type: string
         assignee:
           title: 'New assignee'
           type: string
@@ -49,6 +61,10 @@ spec:
           title: 'New issue type'
           type: string
           description: 'The new issue type name, e.g. Story, Bug or Task'
+        customFields:
+          title: 'Custom fields'
+          type: object
+          description: 'Additional issue fields keyed by Jira field ID, e.g. customfield_10020; passed to Jira verbatim'
         host:
           title: 'Jira host'
           type: string
@@ -63,8 +79,11 @@ spec:
         description: '${{ parameters.description }}'
         descriptionFormat: ${{ parameters.descriptionFormat }}
         labels: ${{ parameters.labels }}
+        addLabels: ${{ parameters.addLabels }}
+        removeLabels: ${{ parameters.removeLabels }}
         assignee: ${{ parameters.assignee }}
         issueType: ${{ parameters.issueType }}
+        customFields: ${{ parameters.customFields }}
         host: ${{ parameters.host }}
   output:
     links:

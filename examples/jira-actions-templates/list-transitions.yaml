@@ -1,0 +1,45 @@
+apiVersion: scaffolder.backstage.io/v1beta3
+kind: Template
+metadata:
+  name: 'jira-test-list-transitions'
+  title: 'Jira Test: List Transitions'
+  description: 'Lists the workflow transitions currently available on a Jira work item via the jira-actions:list-transitions action.'
+  tags:
+    - jira
+    - test
+spec:
+  owner: user:guest
+  type: jira-test
+  parameters:
+    - title: List transitions
+      required:
+        - issueKey
+      properties:
+        issueKey:
+          title: 'Issue key'
+          type: string
+          description: 'The key of the issue, e.g. PROJ-123'
+        host:
+          title: 'Jira host'
+          type: string
+          description: 'Only needed when multiple Jira connections are configured'
+  steps:
+    - id: invoke
+      name: 'List transitions'
+      action: jira-actions:list-transitions
+      input:
+        issueKey: ${{ parameters.issueKey }}
+        host: ${{ parameters.host }}
+  output:
+    text:
+      - title: 'Transitions'
+        content: |
+          | Name | To status |
+          | --- | --- |
+          {% for t in steps.invoke.output.transitions %}| ${{ t.name }} | ${{ t.toStatus }} |
+          {% endfor %}
+      - title: 'JSON'
+        content: |
+          ```json
+          ${{ steps.invoke.output | dump(2) }}
+          ```

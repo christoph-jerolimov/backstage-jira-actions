@@ -13,6 +13,7 @@ export type JiraWorkItemFields = {
   labels?: string[];
   assignee?: string;
   issueType?: string;
+  customFields?: JsonObject;
 };
 
 export type JiraCreateWorkItemRequest = JiraWorkItemFields & {
@@ -37,6 +38,63 @@ export type JiraWorkItem = {
   parentKey?: string;
   created?: string;
   updated?: string;
+  links?: JiraIssueLink[];
+  customFields?: JsonObject;
+};
+
+/**
+ * An issue link as seen from one issue: the relation direction description
+ * reads from that issue towards the linked key (e.g. "blocks PROJ-2").
+ */
+export type JiraIssueLink = {
+  type: string;
+  direction: string;
+  key: string;
+};
+
+export type JiraUser = {
+  id: string;
+  displayName: string;
+  email?: string;
+  active: boolean;
+};
+
+export type JiraLinkType = {
+  id: string;
+  name: string;
+  inward: string;
+  outward: string;
+};
+
+export type JiraField = {
+  id: string;
+  name: string;
+  custom: boolean;
+  type?: string;
+};
+
+export type JiraWorklog = {
+  id: string;
+  author?: string;
+  timeSpent?: string;
+  timeSpentSeconds?: number;
+  started?: string;
+  comment?: unknown;
+};
+
+export type JiraBoard = {
+  id: string;
+  name: string;
+  type?: string;
+};
+
+export type JiraSprint = {
+  id: string;
+  name: string;
+  state?: string;
+  startDate?: string;
+  endDate?: string;
+  goal?: string;
 };
 
 export type JiraSearchItem = {
@@ -58,6 +116,16 @@ export type JiraProject = {
   id: string;
   key: string;
   name: string;
+  url: string;
+  description?: string;
+};
+
+export type JiraComment = {
+  id: string;
+  author?: string;
+  body?: unknown;
+  created?: string;
+  updated?: string;
 };
 
 export type JiraIssueType = {
@@ -65,6 +133,12 @@ export type JiraIssueType = {
   name: string;
   subtask: boolean;
   description?: string;
+};
+
+type RawIssueLink = {
+  type?: { name?: string; inward?: string; outward?: string };
+  inwardIssue?: { key: string };
+  outwardIssue?: { key: string };
 };
 
 type RawIssue = {
@@ -79,7 +153,8 @@ type RawIssue = {
     parent?: { key?: string };
     created?: string;
     updated?: string;
-  };
+    issuelinks?: RawIssueLink[];
+  } & Record<string, unknown>;
 };
 
 const SEARCH_FIELDS = ['summary', 'status', 'issuetype', 'assignee'];
@@ -142,6 +217,7 @@ export class JiraClient {
   async updateIssue(
     issueKey: string,
     update: JiraWorkItemFields,
+    labelEdits?: { add?: string[]; remove?: string[] },
   ): Promise<{ key: string; url: string }> {
     const fields: JsonObject = { ...this.toOptionalFields(update) };
     if (update.summary !== undefined) {
@@ -151,7 +227,12 @@ export class JiraClient {
     const response = await this.request(
       'PUT',
       `/issue/${encodeURIComponent(issueKey)}`,
-      { body: { fields } },
+      {
+        body: {
+          fields,
+          ...(labelEdits ? { update: this.toLabelUpdate(labelEdits) } : {}),
+        },
+      },
     );
     if (!response.ok) {
       await this.throwForResponse(response, `update Jira issue ${issueKey}`);
@@ -161,8 +242,9 @@ export class JiraClient {
 
   async getIssue(
     issueKey: string,
-    options?: { descriptionFormat?: RichTextFormat },
+    options?: { descriptionFormat?: RichTextFormat; customFields?: string[] },
   ): Promise<JiraWorkItem> {
+    const customFieldIds = options?.customFields ?? [];
     const response = await this.request(
       'GET',
       `/issue/${encodeURIComponent(issueKey)}`,
@@ -175,6 +257,8 @@ export class JiraClient {
             'parent',
             'created',
             'updated',
+            'issuelinks',
+            ...customFieldIds,
           ].join(','),
         },
       },
@@ -184,9 +268,16 @@ export class JiraClient {
     }
     const issue = (await response.json()) as RawIssue;
     const fields = issue.fields ?? {};
+    const links = (fields.issuelinks ?? []).map(link => this.toIssueLink(link));
+    const customFields: JsonObject = {};
+    for (const id of customFieldIds) {
+      if (fields[id] !== undefined) {
+        customFields[id] = fields[id] as JsonObject[string];
+      }
+    }
     return {
       ...this.toSearchItem(issue),
-      description: this.toReadDescription(
+      description: this.readRichText(
         fields.description,
         options?.descriptionFormat ?? 'markdown',
       ),
@@ -195,29 +286,63 @@ export class JiraClient {
       parentKey: fields.parent?.key,
       created: fields.created,
       updated: fields.updated,
+      links: links.length > 0 ? links : undefined,
+      customFields: customFieldIds.length > 0 ? customFields : undefined,
     };
   }
 
   async searchIssues(options: {
     jql: string;
     maxResults: number;
-  }): Promise<{ items: JiraSearchItem[] }> {
+    pageToken?: string;
+  }): Promise<{ items: JiraSearchItem[]; nextPageToken?: string }> {
     // Jira Cloud deprecated the classic /search endpoint in favor of the
-    // token-paged /search/jql endpoint; Data Center still uses /search.
-    const path = this.isCloud ? '/search/jql' : '/search';
-    const response = await this.request('POST', path, {
+    // token-paged /search/jql endpoint; Data Center still uses /search,
+    // which pages by startAt offsets (encoded as the opaque page token).
+    if (this.isCloud) {
+      const response = await this.request('POST', '/search/jql', {
+        body: {
+          jql: options.jql,
+          maxResults: options.maxResults,
+          fields: SEARCH_FIELDS,
+          ...(options.pageToken !== undefined
+            ? { nextPageToken: options.pageToken }
+            : {}),
+        },
+      });
+      if (!response.ok) {
+        await this.throwForResponse(response, 'search Jira issues');
+      }
+      const body = (await response.json()) as {
+        issues?: RawIssue[];
+        nextPageToken?: string;
+      };
+      return {
+        items: (body.issues ?? []).map(issue => this.toSearchItem(issue)),
+        nextPageToken: body.nextPageToken || undefined,
+      };
+    }
+
+    const startAt = this.parseOffsetToken(options.pageToken);
+    const response = await this.request('POST', '/search', {
       body: {
         jql: options.jql,
         maxResults: options.maxResults,
         fields: SEARCH_FIELDS,
+        startAt,
       },
     });
     if (!response.ok) {
       await this.throwForResponse(response, 'search Jira issues');
     }
-    const body = (await response.json()) as { issues?: RawIssue[] };
+    const body = (await response.json()) as {
+      issues?: RawIssue[];
+      total?: number;
+    };
+    const issues = body.issues ?? [];
     return {
-      items: (body.issues ?? []).map(issue => this.toSearchItem(issue)),
+      items: issues.map(issue => this.toSearchItem(issue)),
+      nextPageToken: this.nextOffsetToken(startAt, issues.length, body.total),
     };
   }
 
@@ -288,12 +413,114 @@ export class JiraClient {
     }
   }
 
-  async listProjects(options: { maxResults: number }): Promise<JiraProject[]> {
-    type RawProject = { id: string | number; key: string; name: string };
+  async getComments(
+    issueKey: string,
+    options: { maxResults: number; pageToken?: string },
+  ): Promise<{ comments: JiraComment[]; nextPageToken?: string }> {
+    const startAt = this.parseOffsetToken(options.pageToken);
+    const response = await this.request(
+      'GET',
+      `/issue/${encodeURIComponent(issueKey)}/comment`,
+      {
+        query: {
+          maxResults: String(options.maxResults),
+          startAt: String(startAt),
+        },
+      },
+    );
+    if (!response.ok) {
+      await this.throwForResponse(
+        response,
+        `get comments of Jira issue ${issueKey}`,
+      );
+    }
+    const body = (await response.json()) as {
+      comments?: Array<{
+        id: string | number;
+        author?: { displayName?: string } | null;
+        body?: unknown;
+        created?: string;
+        updated?: string;
+      }>;
+      total?: number;
+    };
+    const comments = body.comments ?? [];
+    return {
+      comments: comments.map(comment => ({
+        id: String(comment.id),
+        author: comment.author?.displayName || undefined,
+        body: comment.body,
+        created: comment.created,
+        updated: comment.updated,
+      })),
+      nextPageToken: this.nextOffsetToken(startAt, comments.length, body.total),
+    };
+  }
+
+  /**
+   * Adds and/or removes labels incrementally via Jira's update section,
+   * never replacing the full list, and returns the resulting labels.
+   */
+  async editLabels(
+    issueKey: string,
+    edits: { add?: string[]; remove?: string[] },
+  ): Promise<string[]> {
+    const response = await this.request(
+      'PUT',
+      `/issue/${encodeURIComponent(issueKey)}`,
+      { body: { update: this.toLabelUpdate(edits) } },
+    );
+    if (!response.ok) {
+      await this.throwForResponse(
+        response,
+        `edit labels of Jira issue ${issueKey}`,
+      );
+    }
+
+    const readBack = await this.request(
+      'GET',
+      `/issue/${encodeURIComponent(issueKey)}`,
+      { query: { fields: 'labels' } },
+    );
+    if (!readBack.ok) {
+      await this.throwForResponse(readBack, `get Jira issue ${issueKey}`);
+    }
+    const issue = (await readBack.json()) as RawIssue;
+    return issue.fields?.labels ?? [];
+  }
+
+  async setParent(issueKey: string, parentKey: string): Promise<void> {
+    const response = await this.request(
+      'PUT',
+      `/issue/${encodeURIComponent(issueKey)}`,
+      { body: { fields: { parent: { key: parentKey } } } },
+    );
+    if (!response.ok) {
+      await this.throwForResponse(
+        response,
+        `set parent of Jira issue ${issueKey}`,
+      );
+    }
+  }
+
+  async listProjects(options: {
+    maxResults: number;
+    name?: string;
+  }): Promise<JiraProject[]> {
+    type RawProject = {
+      id: string | number;
+      key: string;
+      name: string;
+      description?: string;
+    };
     let projects: RawProject[];
     if (this.isCloud) {
       const response = await this.request('GET', '/project/search', {
-        query: { maxResults: String(options.maxResults) },
+        query: {
+          maxResults: String(options.maxResults),
+          expand: 'description',
+          ...(options.name ? { query: options.name } : {}),
+        },
       });
       if (!response.ok) {
         await this.throwForResponse(response, 'list Jira projects');
@@ -301,16 +528,30 @@ export class JiraClient {
       const body = (await response.json()) as { values?: RawProject[] };
       projects = body.values ?? [];
     } else {
-      const response = await this.request('GET', '/project');
+      const response = await this.request('GET', '/project', {
+        query: { expand: 'description' },
+      });
       if (!response.ok) {
         await this.throwForResponse(response, 'list Jira projects');
       }
       projects = (await response.json()) as RawProject[];
     }
+    // Uniform name/key filtering on both products; on Cloud the server-side
+    // query only pre-narrows the result.
+    const filter = options.name?.toLocaleLowerCase('en-US');
+    if (filter) {
+      projects = projects.filter(
+        project =>
+          project.name.toLocaleLowerCase('en-US').includes(filter) ||
+          project.key.toLocaleLowerCase('en-US').includes(filter),
+      );
+    }
     return projects.slice(0, options.maxResults).map(project => ({
       id: String(project.id),
       key: project.key,
       name: project.name,
+      url: this.browseUrl(project.key),
+      description: project.description || undefined,
     }));
   }
 
@@ -338,7 +579,335 @@ export class JiraClient {
     }));
   }
 
-  private toReadDescription(
+  async searchUsers(
+    query: string,
+    options: { maxResults: number },
+  ): Promise<JiraUser[]> {
+    // Cloud matches display names/emails via `query`; Data Center uses
+    // `username` for the same fuzzy matching.
+    const response = await this.request('GET', '/user/search', {
+      query: {
+        maxResults: String(options.maxResults),
+        ...(this.isCloud ? { query } : { username: query }),
+      },
+    });
+    if (!response.ok) {
+      await this.throwForResponse(response, 'search Jira users');
+    }
+    const body = (await response.json()) as Array<{
+      accountId?: string;
+      name?: string;
+      displayName?: string;
+      emailAddress?: string;
+      active?: boolean;
+    }>;
+    return body.map(user => ({
+      id: (this.isCloud ? user.accountId : user.name) ?? '',
+      displayName: user.displayName ?? '',
+      email: user.emailAddress || undefined,
+      active: user.active ?? true,
+    }));
+  }
+
+  async listLinkTypes(): Promise<JiraLinkType[]> {
+    const response = await this.request('GET', '/issueLinkType');
+    if (!response.ok) {
+      await this.throwForResponse(response, 'list Jira issue link types');
+    }
+    const body = (await response.json()) as {
+      issueLinkTypes?: Array<{
+        id: string | number;
+        name?: string;
+        inward?: string;
+        outward?: string;
+      }>;
+    };
+    return (body.issueLinkTypes ?? []).map(type => ({
+      id: String(type.id),
+      name: type.name ?? '',
+      inward: type.inward ?? '',
+      outward: type.outward ?? '',
+    }));
+  }
+
+  /**
+   * Links two issues, resolving the link type case-insensitively by name,
+   * outward, or inward description. The outward issue is the subject of the
+   * outward description ("A blocks B" means outward=A, inward=B), so a match
+   * on the inward description swaps the direction.
+   */
+  async linkIssues(
+    issueKey: string,
+    targetKey: string,
+    linkType: string,
+  ): Promise<{ linkType: string }> {
+    const types = await this.listLinkTypes();
+    const wanted = linkType.toLocaleLowerCase('en-US');
+    const match = types.find(
+      type =>
+        type.name.toLocaleLowerCase('en-US') === wanted ||
+        type.outward.toLocaleLowerCase('en-US') === wanted ||
+        type.inward.toLocaleLowerCase('en-US') === wanted,
+    );
+    if (!match) {
+      const available = types
+        .map(
+          type =>
+            `"${type.name}" (outward: "${type.outward}", inward: "${type.inward}")`,
+        )
+        .join(', ');
+      throw new InputError(
+        `Unknown Jira issue link type "${linkType}"; available types: ${available}`,
+      );
+    }
+    const reversed = match.inward.toLocaleLowerCase('en-US') === wanted;
+    const response = await this.request('POST', '/issueLink', {
+      body: {
+        type: { name: match.name },
+        outwardIssue: { key: reversed ? targetKey : issueKey },
+        inwardIssue: { key: reversed ? issueKey : targetKey },
+      },
+    });
+    if (!response.ok) {
+      await this.throwForResponse(
+        response,
+        `link Jira issues ${issueKey} and ${targetKey}`,
+      );
+    }
+    return { linkType: match.name };
+  }
+
+  async listFields(options?: { name?: string }): Promise<JiraField[]> {
+    const response = await this.request('GET', '/field');
+    if (!response.ok) {
+      await this.throwForResponse(response, 'list Jira fields');
+    }
+    const body = (await response.json()) as Array<{
+      id: string;
+      name?: string;
+      custom?: boolean;
+      schema?: { type?: string };
+    }>;
+    const filter = options?.name?.toLocaleLowerCase('en-US');
+    return body
+      .filter(
+        field =>
+          !filter ||
+          field.id.toLocaleLowerCase('en-US').includes(filter) ||
+          (field.name ?? '').toLocaleLowerCase('en-US').includes(filter),
+      )
+      .map(field => ({
+        id: field.id,
+        name: field.name ?? '',
+        custom: field.custom ?? false,
+        type: field.schema?.type,
+      }));
+  }
+
+  async getWorklogs(
+    issueKey: string,
+    options: { maxResults: number },
+  ): Promise<JiraWorklog[]> {
+    const response = await this.request(
+      'GET',
+      `/issue/${encodeURIComponent(issueKey)}/worklog`,
+      { query: { maxResults: String(options.maxResults) } },
+    );
+    if (!response.ok) {
+      await this.throwForResponse(
+        response,
+        `get worklogs of Jira issue ${issueKey}`,
+      );
+    }
+    const body = (await response.json()) as {
+      worklogs?: Array<{
+        id: string | number;
+        author?: { displayName?: string } | null;
+        timeSpent?: string;
+        timeSpentSeconds?: number;
+        started?: string;
+        comment?: unknown;
+      }>;
+    };
+    return (body.worklogs ?? []).map(worklog => ({
+      id: String(worklog.id),
+      author: worklog.author?.displayName || undefined,
+      timeSpent: worklog.timeSpent,
+      timeSpentSeconds: worklog.timeSpentSeconds,
+      started: worklog.started,
+      comment: worklog.comment,
+    }));
+  }
+
+  async addWorklog(
+    issueKey: string,
+    entry: {
+      timeSpent: string;
+      started?: string;
+      comment?: string | JsonObject;
+      commentFormat?: RichTextFormat;
+    },
+  ): Promise<{ worklogId: string }> {
+    const response = await this.request(
+      'POST',
+      `/issue/${encodeURIComponent(issueKey)}/worklog`,
+      {
+        body: {
+          timeSpent: entry.timeSpent,
+          ...(entry.started !== undefined ? { started: entry.started } : {}),
+          ...(entry.comment !== undefined
+            ? {
+                comment: toWriteValue(
+                  entry.comment,
+                  entry.commentFormat ?? 'markdown',
+                  this.isCloud,
+                ),
+              }
+            : {}),
+        },
+      },
+    );
+    if (!response.ok) {
+      await this.throwForResponse(
+        response,
+        `add worklog to Jira issue ${issueKey}`,
+      );
+    }
+    const body = (await response.json()) as { id: string | number };
+    return { worklogId: String(body.id) };
+  }
+
+  async addWatcher(issueKey: string, user: string): Promise<void> {
+    // The watchers endpoint takes the bare user id as a JSON string body.
+    const response = await this.request(
+      'POST',
+      `/issue/${encodeURIComponent(issueKey)}/watchers`,
+      { body: user },
+    );
+    if (!response.ok) {
+      await this.throwForResponse(
+        response,
+        `add watcher to Jira issue ${issueKey}`,
+      );
+    }
+  }
+
+  async removeWatcher(issueKey: string, user: string): Promise<void> {
+    const response = await this.request(
+      'DELETE',
+      `/issue/${encodeURIComponent(issueKey)}/watchers`,
+      { query: this.isCloud ? { accountId: user } : { username: user } },
+    );
+    if (!response.ok) {
+      await this.throwForResponse(
+        response,
+        `remove watcher from Jira issue ${issueKey}`,
+      );
+    }
+  }
+
+  async deleteIssue(
+    issueKey: string,
+    options?: { deleteSubtasks?: boolean },
+  ): Promise<void> {
+    const response = await this.request(
+      'DELETE',
+      `/issue/${encodeURIComponent(issueKey)}`,
+      {
+        query: { deleteSubtasks: String(options?.deleteSubtasks ?? false) },
+      },
+    );
+    if (!response.ok) {
+      await this.throwForResponse(response, `delete Jira issue ${issueKey}`);
+    }
+  }
+
+  async listBoards(options: {
+    maxResults: number;
+    name?: string;
+    projectKey?: string;
+  }): Promise<JiraBoard[]> {
+    const response = await this.request('GET', '/board', {
+      api: 'agile',
+      query: {
+        maxResults: String(options.maxResults),
+        ...(options.name ? { name: options.name } : {}),
+        ...(options.projectKey ? { projectKeyOrId: options.projectKey } : {}),
+      },
+    });
+    if (!response.ok) {
+      await this.throwForResponse(response, 'list Jira boards');
+    }
+    const body = (await response.json()) as {
+      values?: Array<{ id: string | number; name?: string; type?: string }>;
+    };
+    return (body.values ?? []).map(board => ({
+      id: String(board.id),
+      name: board.name ?? '',
+      type: board.type,
+    }));
+  }
+
+  async listSprints(
+    boardId: string,
+    options: { maxResults: number; state?: string },
+  ): Promise<JiraSprint[]> {
+    const response = await this.request(
+      'GET',
+      `/board/${encodeURIComponent(boardId)}/sprint`,
+      {
+        api: 'agile',
+        query: {
+          maxResults: String(options.maxResults),
+          ...(options.state ? { state: options.state } : {}),
+        },
+      },
+    );
+    if (!response.ok) {
+      await this.throwForResponse(
+        response,
+        `list sprints of Jira board ${boardId}`,
+      );
+    }
+    const body = (await response.json()) as {
+      values?: Array<{
+        id: string | number;
+        name?: string;
+        state?: string;
+        startDate?: string;
+        endDate?: string;
+        goal?: string;
+      }>;
+    };
+    return (body.values ?? []).map(sprint => ({
+      id: String(sprint.id),
+      name: sprint.name ?? '',
+      state: sprint.state,
+      startDate: sprint.startDate,
+      endDate: sprint.endDate,
+      goal: sprint.goal || undefined,
+    }));
+  }
+
+  async moveToSprint(sprintId: string, issueKeys: string[]): Promise<void> {
+    const response = await this.request(
+      'POST',
+      `/sprint/${encodeURIComponent(sprintId)}/issue`,
+      { api: 'agile', body: { issues: issueKeys } },
+    );
+    if (!response.ok) {
+      await this.throwForResponse(
+        response,
+        `move Jira issues to sprint ${sprintId}`,
+      );
+    }
+  }
+
+  /**
+   * Renders a rich-text value read from Jira (a description or comment
+   * body) in the requested format.
+   */
+  readRichText(
     description: unknown,
     format: RichTextFormat,
   ): string | JsonObject | undefined {
@@ -353,6 +922,53 @@ export class JiraClient {
     return format === 'text'
       ? adfToText(description)
       : adfToMarkdown(description);
+  }
+
+  private toLabelUpdate(edits: {
+    add?: string[];
+    remove?: string[];
+  }): JsonObject {
+    return {
+      labels: [
+        ...(edits.add ?? []).map(label => ({ add: label })),
+        ...(edits.remove ?? []).map(label => ({ remove: label })),
+      ],
+    };
+  }
+
+  private toIssueLink(link: RawIssueLink): JiraIssueLink {
+    // The direction description reads from the issue the link was fetched
+    // for: an outwardIssue entry means "this issue <outward> that key".
+    const linked = link.outwardIssue ?? link.inwardIssue;
+    return {
+      type: link.type?.name ?? '',
+      direction:
+        (link.outwardIssue ? link.type?.outward : link.type?.inward) ?? '',
+      key: linked?.key ?? '',
+    };
+  }
+
+  private parseOffsetToken(token?: string): number {
+    if (token === undefined) {
+      return 0;
+    }
+    if (!/^\d+$/.test(token)) {
+      throw new InputError(
+        `Invalid pageToken "${token}"; pass the nextPageToken of a previous invocation`,
+      );
+    }
+    return parseInt(token, 10);
+  }
+
+  private nextOffsetToken(
+    startAt: number,
+    returned: number,
+    total?: number,
+  ): string | undefined {
+    const next = startAt + returned;
+    return returned > 0 && total !== undefined && next < total
+      ? String(next)
+      : undefined;
   }
 
   private toSearchItem(issue: RawIssue): JiraSearchItem {
@@ -390,15 +1006,30 @@ export class JiraClient {
         ? { id: input.assignee }
         : { name: input.assignee };
     }
+    // Custom field values are passed to Jira verbatim, keyed by field id;
+    // spread last so an explicit custom value wins an id collision.
+    if (input.customFields !== undefined) {
+      Object.assign(fields, input.customFields);
+    }
     return fields;
+  }
+
+  private get agileBase(): string {
+    // The Agile API lives under the same unversioned path on both products.
+    return `${this.connection.apiBaseUrl.replace(/\/$/, '')}/rest/agile/1.0`;
   }
 
   private async request(
     method: string,
     path: string,
-    options?: { body?: JsonObject; query?: Record<string, string> },
+    options?: {
+      body?: JsonObject | string;
+      query?: Record<string, string>;
+      api?: 'core' | 'agile';
+    },
   ): Promise<Response> {
-    const url = new URL(`${this.apiBase}${path}`);
+    const base = options?.api === 'agile' ? this.agileBase : this.apiBase;
+    const url = new URL(`${base}${path}`);
     for (const [name, value] of Object.entries(options?.query ?? {})) {
       url.searchParams.set(name, value);
     }

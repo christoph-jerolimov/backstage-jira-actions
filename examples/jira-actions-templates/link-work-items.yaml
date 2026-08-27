@@ -1,0 +1,54 @@
+apiVersion: scaffolder.backstage.io/v1beta3
+kind: Template
+metadata:
+  name: 'jira-test-link-work-items'
+  title: 'Jira Test: Link Work Items'
+  description: 'Links two Jira work items with a relation such as "blocks" via the jira-actions:link-work-items action.'
+  tags:
+    - jira
+    - test
+spec:
+  owner: user:guest
+  type: jira-test
+  parameters:
+    - title: Link work items
+      required:
+        - issueKey
+        - targetKey
+        - linkType
+      properties:
+        issueKey:
+          title: 'Issue key'
+          type: string
+          description: 'The key of the issue the relation reads from, e.g. PROJ-123'
+        targetKey:
+          title: 'Target key'
+          type: string
+          description: 'The key of the issue to link to, e.g. PROJ-1'
+        linkType:
+          title: 'Link type'
+          type: string
+          description: 'The link type name (e.g. Blocks) or a relation description (e.g. blocks, is blocked by)'
+        host:
+          title: 'Jira host'
+          type: string
+          description: 'Only needed when multiple Jira connections are configured'
+  steps:
+    - id: invoke
+      name: 'Link work items'
+      action: jira-actions:link-work-items
+      input:
+        issueKey: ${{ parameters.issueKey }}
+        targetKey: ${{ parameters.targetKey }}
+        linkType: ${{ parameters.linkType }}
+        host: ${{ parameters.host }}
+  output:
+    links:
+      - title: Open issue
+        url: ${{ steps.invoke.output.url }}
+    text:
+      - title: Result
+        content: |
+          ```json
+          ${{ steps.invoke.output | dump(2) }}
+          ```

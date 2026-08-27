@@ -1,16 +1,19 @@
+import { PermissionsService } from '@backstage/backend-plugin-api';
 import { ActionsRegistryService } from '@backstage/backend-plugin-api/alpha';
 import { InputError } from '@backstage/errors';
 import { CatalogService } from '@backstage/plugin-catalog-node';
 import { JiraClient } from '../lib/JiraClient';
 import { JiraConnectionsReader } from '../lib/connections';
 import { resolveEntityProject } from '../lib/entityProject';
+import { assertPermission, jiraWorkItemReadPermission } from '../permissions';
 
 export function registerListIssueTypesAction(options: {
   actionsRegistry: ActionsRegistryService;
   connections: JiraConnectionsReader;
+  permissions: PermissionsService;
   catalog: CatalogService;
 }) {
-  const { actionsRegistry, connections, catalog } = options;
+  const { actionsRegistry, connections, permissions, catalog } = options;
 
   actionsRegistry.register({
     name: 'list-issue-types',
@@ -64,6 +67,11 @@ export function registerListIssueTypesAction(options: {
         }),
     },
     action: async ({ input, credentials }) => {
+      await assertPermission(
+        permissions,
+        jiraWorkItemReadPermission,
+        credentials,
+      );
       if (
         (input.projectKey === undefined) ===
         (input.entityRef === undefined)

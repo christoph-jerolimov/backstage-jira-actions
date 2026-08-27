@@ -1,0 +1,59 @@
+apiVersion: scaffolder.backstage.io/v1beta3
+kind: Template
+metadata:
+  name: 'jira-test-list-sprints'
+  title: 'Jira Test: List Sprints'
+  description: 'Lists the sprints of a Jira agile board via the jira-actions:list-sprints action.'
+  tags:
+    - jira
+    - test
+spec:
+  owner: user:guest
+  type: jira-test
+  parameters:
+    - title: List sprints
+      required:
+        - boardId
+      properties:
+        boardId:
+          title: 'Board ID'
+          type: string
+          description: 'The ID of the board, as returned by list-boards'
+        state:
+          title: 'State'
+          type: string
+          description: 'Only return sprints in this state'
+          enum:
+            - active
+            - future
+            - closed
+        maxResults:
+          title: 'Maximum results'
+          type: number
+          description: 'Maximum number of sprints to return, default 50'
+        host:
+          title: 'Jira host'
+          type: string
+          description: 'Only needed when multiple Jira connections are configured'
+  steps:
+    - id: invoke
+      name: 'List sprints'
+      action: jira-actions:list-sprints
+      input:
+        boardId: ${{ parameters.boardId }}
+        state: ${{ parameters.state }}
+        maxResults: ${{ parameters.maxResults }}
+        host: ${{ parameters.host }}
+  output:
+    text:
+      - title: 'Sprints'
+        content: |
+          | Name | State | Start | End |
+          | --- | --- | --- | --- |
+          {% for s in steps.invoke.output.sprints %}| ${{ s.name }} | ${{ s.state }} | ${{ s.startDate }} | ${{ s.endDate }} |
+          {% endfor %}
+      - title: 'JSON'
+        content: |
+          ```json
+          ${{ steps.invoke.output | dump(2) }}
+          ```

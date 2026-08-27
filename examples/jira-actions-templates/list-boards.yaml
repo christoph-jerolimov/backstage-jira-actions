@@ -1,0 +1,53 @@
+apiVersion: scaffolder.backstage.io/v1beta3
+kind: Template
+metadata:
+  name: 'jira-test-list-boards'
+  title: 'Jira Test: List Boards'
+  description: 'Lists the visible Jira agile boards via the jira-actions:list-boards action.'
+  tags:
+    - jira
+    - test
+spec:
+  owner: user:guest
+  type: jira-test
+  parameters:
+    - title: List boards
+      properties:
+        name:
+          title: 'Name filter'
+          type: string
+          description: 'A filter matched against the board name'
+        projectKey:
+          title: 'Project key'
+          type: string
+          description: 'Restrict to boards of this project'
+        maxResults:
+          title: 'Maximum results'
+          type: number
+          description: 'Maximum number of boards to return, default 50'
+        host:
+          title: 'Jira host'
+          type: string
+          description: 'Only needed when multiple Jira connections are configured'
+  steps:
+    - id: invoke
+      name: 'List boards'
+      action: jira-actions:list-boards
+      input:
+        name: ${{ parameters.name }}
+        projectKey: ${{ parameters.projectKey }}
+        maxResults: ${{ parameters.maxResults }}
+        host: ${{ parameters.host }}
+  output:
+    text:
+      - title: 'Boards'
+        content: |
+          | ID | Name | Type |
+          | --- | --- | --- |
+          {% for b in steps.invoke.output.boards %}| ${{ b.id }} | ${{ b.name }} | ${{ b.type }} |
+          {% endfor %}
+      - title: 'JSON'
+        content: |
+          ```json
+          ${{ steps.invoke.output | dump(2) }}
+          ```

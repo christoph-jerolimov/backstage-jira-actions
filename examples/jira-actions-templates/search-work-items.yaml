@@ -52,6 +52,10 @@ spec:
           title: 'Maximum results'
           type: number
           description: 'Maximum number of results to return, default 25'
+        pageToken:
+          title: 'Page token'
+          type: string
+          description: 'An opaque cursor from a previous run to fetch the next page'
         host:
           title: 'Jira host'
           type: string
@@ -70,12 +74,15 @@ spec:
         assignee: ${{ parameters.assignee }}
         labels: ${{ parameters.labels }}
         maxResults: ${{ parameters.maxResults }}
+        pageToken: ${{ parameters.pageToken }}
         host: ${{ parameters.host }}
   output:
     text:
       - title: 'Work items'
         content: |
-          {% for i in steps.invoke.output.items %}- [${{ i.key }}](${{ i.url }}) — ${{ i.summary }} (${{ i.status }})
+          | Key | Summary | Status | Type | Assignee |
+          | --- | --- | --- | --- | --- |
+          {% for i in steps.invoke.output.items %}| [${{ i.key }}](${{ i.url }}) | ${{ i.summary }} | ${{ i.status }} | ${{ i.issueType }} | ${{ i.assignee }} |
           {% endfor %}
       - title: 'JSON'
         content: |

@@ -4,20 +4,50 @@ import {
 } from '@backstage/backend-test-utils';
 import { actionsRegistryServiceMock } from '@backstage/backend-test-utils/alpha';
 import { Entity } from '@backstage/catalog-model';
+import { AuthorizeResult } from '@backstage/plugin-permission-common';
 import { catalogServiceMock } from '@backstage/plugin-catalog-node/testUtils';
 import { http, HttpResponse } from 'msw';
 import { setupServer } from 'msw/node';
 import { registerAddCommentAction } from './addComment';
+import {
+  registerListBoardsAction,
+  registerListSprintsAction,
+  registerMoveToSprintAction,
+} from './agile';
 import { registerCreateWorkItemAction } from './createWorkItem';
+import { registerDeleteWorkItemAction } from './deleteWorkItem';
+import { registerGetCommentsAction } from './getComments';
 import { registerGetWorkItemAction } from './getWorkItem';
+import {
+  registerLinkWorkItemsAction,
+  registerListLinkTypesAction,
+} from './issueLinks';
+import { registerAddLabelAction, registerRemoveLabelAction } from './labels';
+import { registerListFieldsAction } from './listFields';
 import { registerListIssueTypesAction } from './listIssueTypes';
 import { registerListProjectsAction } from './listProjects';
+import { registerListTransitionsAction } from './listTransitions';
+import { registerRenameWorkItemAction } from './renameWorkItem';
+import { registerSearchUsersAction } from './searchUsers';
 import { registerSearchWorkItemsAction } from './searchWorkItems';
+import { registerSetWorkItemParentAction } from './setWorkItemParent';
 import { registerTransitionWorkItemAction } from './transitionWorkItem';
 import { registerUpdateWorkItemAction } from './updateWorkItem';
+import {
+  registerAddWatcherAction,
+  registerRemoveWatcherAction,
+} from './watchers';
+import {
+  registerAddWorklogAction,
+  registerGetWorklogsAction,
+} from './worklogs';
 import { JiraConnectionsReader } from '../lib/connections';
 
-function makeRegistry(connections: unknown, entities: Entity[] = []) {
+function makeRegistry(
+  connections: unknown,
+  entities: Entity[] = [],
+  permissions = mockServices.permissions(),
+) {
   const actionsRegistry = actionsRegistryServiceMock();
   const reader = JiraConnectionsReader.fromConfig(
     mockServices.rootConfig({ data: { connections } as any }),
@@ -27,22 +57,80 @@ function makeRegistry(connections: unknown, entities: Entity[] = []) {
     actionsRegistry,
     connections: reader,
     catalog,
+    permissions,
   });
-  registerUpdateWorkItemAction({ actionsRegistry, connections: reader });
-  registerGetWorkItemAction({ actionsRegistry, connections: reader });
+  registerUpdateWorkItemAction({
+    actionsRegistry,
+    connections: reader,
+    permissions,
+  });
+  registerRenameWorkItemAction({
+    actionsRegistry,
+    connections: reader,
+    permissions,
+  });
+  registerSetWorkItemParentAction({
+    actionsRegistry,
+    connections: reader,
+    permissions,
+  });
+  registerAddLabelAction({ actionsRegistry, connections: reader, permissions });
+  registerRemoveLabelAction({
+    actionsRegistry,
+    connections: reader,
+    permissions,
+  });
+  registerGetWorkItemAction({
+    actionsRegistry,
+    connections: reader,
+    permissions,
+  });
+  registerGetCommentsAction({
+    actionsRegistry,
+    connections: reader,
+    permissions,
+  });
   registerSearchWorkItemsAction({
     actionsRegistry,
     connections: reader,
     catalog,
+    permissions,
   });
-  registerAddCommentAction({ actionsRegistry, connections: reader });
-  registerTransitionWorkItemAction({ actionsRegistry, connections: reader });
-  registerListProjectsAction({ actionsRegistry, connections: reader });
+  registerAddCommentAction({
+    actionsRegistry,
+    connections: reader,
+    permissions,
+  });
+  registerTransitionWorkItemAction({
+    actionsRegistry,
+    connections: reader,
+    permissions,
+  });
+  registerListProjectsAction({
+    actionsRegistry,
+    connections: reader,
+    permissions,
+  });
   registerListIssueTypesAction({
     actionsRegistry,
     connections: reader,
     catalog,
+    permissions,
   });
+  const common = { actionsRegistry, connections: reader, permissions };
+  registerDeleteWorkItemAction(common);
+  registerSearchUsersAction(common);
+  registerLinkWorkItemsAction(common);
+  registerListLinkTypesAction(common);
+  registerListTransitionsAction(common);
+  registerListFieldsAction(common);
+  registerGetWorklogsAction(common);
+  registerAddWorklogAction(common);
+  registerAddWatcherAction(common);
+  registerRemoveWatcherAction(common);
+  registerListBoardsAction(common);
+  registerListSprintsAction(common);
+  registerMoveToSprintAction(common);
   return actionsRegistry;
 }
 
@@ -250,6 +338,65 @@ describe('jira work item actions', () => {
       expect(called).toBe(false);
     });
 
+    it('adds and removes labels incrementally in a single request', async () => {
+      let received: any;
+      server.use(
+        http.put(
+          'https://example.atlassian.net/rest/api/3/issue/PROJ-123',
+          async ({ request }) => {
+            received = await request.json();
+            return new HttpResponse(null, { status: 204 });
+          },
+        ),
+      );
+
+      const result = await makeRegistry([cloudConnection]).invoke({
+        id: 'test:update-work-item',
+        input: {
+          issueKey: 'PROJ-123',
+          summary: 'New summary',
+          addLabels: ['backend'],
+          removeLabels: ['frontend'],
+        },
+      });
+
+      expect(received).toEqual({
+        fields: { summary: 'New summary' },
+        update: { labels: [{ add: 'backend' }, { remove: 'frontend' }] },
+      });
+      expect(result).toEqual({
+        output: {
+          key: 'PROJ-123',
+          url: 'https://example.atlassian.net/browse/PROJ-123',
+        },
+      });
+    });
+
+    it('rejects labels combined with addLabels or removeLabels before calling Jira', async () => {
+      let called = false;
+      server.use(
+        http.put(
+          'https://example.atlassian.net/rest/api/3/issue/PROJ-123',
+          () => {
+            called = true;
+            return new HttpResponse(null, { status: 204 });
+          },
+        ),
+      );
+
+      await expect(
+        makeRegistry([cloudConnection]).invoke({
+          id: 'test:update-work-item',
+          input: {
+            issueKey: 'PROJ-123',
+            labels: ['a'],
+            addLabels: ['b'],
+          },
+        }),
+      ).rejects.toThrow(/cannot be combined with "addLabels"/);
+      expect(called).toBe(false);
+    });
+
     it('fails with NotFound for an unknown issue', async () => {
       server.use(
         http.put(
@@ -270,6 +417,290 @@ describe('jira work item actions', () => {
         makeRegistry([cloudConnection]).invoke({
           id: 'test:update-work-item',
           input: { issueKey: 'PROJ-999', summary: 'x' },
+        }),
+      ).rejects.toThrow(/status 404.*Issue does not exist/);
+    });
+  });
+
+  describe('rename-work-item', () => {
+    it('changes only the summary of an issue', async () => {
+      let received: any;
+      server.use(
+        http.put(
+          'https://example.atlassian.net/rest/api/3/issue/PROJ-123',
+          async ({ request }) => {
+            received = await request.json();
+            return new HttpResponse(null, { status: 204 });
+          },
+        ),
+      );
+
+      const result = await makeRegistry([cloudConnection]).invoke({
+        id: 'test:rename-work-item',
+        input: { issueKey: 'PROJ-123', summary: 'Better title' },
+      });
+
+      expect(received).toEqual({ fields: { summary: 'Better title' } });
+      expect(result).toEqual({
+        output: {
+          key: 'PROJ-123',
+          summary: 'Better title',
+          url: 'https://example.atlassian.net/browse/PROJ-123',
+        },
+      });
+    });
+
+    it('fails with NotFound for an unknown issue', async () => {
+      server.use(
+        http.put(
+          'https://example.atlassian.net/rest/api/3/issue/PROJ-999',
+          () =>
+            HttpResponse.json(
+              { errorMessages: ['Issue does not exist'] },
+              { status: 404 },
+            ),
+        ),
+      );
+
+      await expect(
+        makeRegistry([cloudConnection]).invoke({
+          id: 'test:rename-work-item',
+          input: { issueKey: 'PROJ-999', summary: 'x' },
+        }),
+      ).rejects.toThrow(/status 404.*Issue does not exist/);
+    });
+  });
+
+  describe('set-work-item-parent', () => {
+    it('changes only the parent of an issue', async () => {
+      let received: any;
+      server.use(
+        http.put(
+          'https://example.atlassian.net/rest/api/3/issue/PROJ-123',
+          async ({ request }) => {
+            received = await request.json();
+            return new HttpResponse(null, { status: 204 });
+          },
+        ),
+      );
+
+      const result = await makeRegistry([cloudConnection]).invoke({
+        id: 'test:set-work-item-parent',
+        input: { issueKey: 'PROJ-123', parentKey: 'PROJ-1' },
+      });
+
+      expect(received).toEqual({ fields: { parent: { key: 'PROJ-1' } } });
+      expect(result).toEqual({
+        output: {
+          key: 'PROJ-123',
+          parentKey: 'PROJ-1',
+          url: 'https://example.atlassian.net/browse/PROJ-123',
+        },
+      });
+    });
+
+    it('propagates Jira errors for an invalid parent', async () => {
+      server.use(
+        http.put(
+          'https://example.atlassian.net/rest/api/3/issue/PROJ-123',
+          () =>
+            HttpResponse.json(
+              { errors: { parent: 'The parent issue is not valid.' } },
+              { status: 400 },
+            ),
+        ),
+      );
+
+      await expect(
+        makeRegistry([cloudConnection]).invoke({
+          id: 'test:set-work-item-parent',
+          input: { issueKey: 'PROJ-123', parentKey: 'PROJ-999' },
+        }),
+      ).rejects.toThrow(/parent.*not valid/);
+    });
+  });
+
+  describe('add-label and remove-label', () => {
+    it('adds a single label and returns the resulting labels', async () => {
+      let received: any;
+      server.use(
+        http.put(
+          'https://example.atlassian.net/rest/api/3/issue/PROJ-123',
+          async ({ request }) => {
+            received = await request.json();
+            return new HttpResponse(null, { status: 204 });
+          },
+        ),
+        http.get(
+          'https://example.atlassian.net/rest/api/3/issue/PROJ-123',
+          () =>
+            HttpResponse.json({
+              key: 'PROJ-123',
+              fields: { labels: ['backend', 'urgent'] },
+            }),
+        ),
+      );
+
+      const result = await makeRegistry([cloudConnection]).invoke({
+        id: 'test:add-label',
+        input: { issueKey: 'PROJ-123', label: 'urgent' },
+      });
+
+      expect(received).toEqual({
+        update: { labels: [{ add: 'urgent' }] },
+      });
+      expect(result).toEqual({
+        output: {
+          key: 'PROJ-123',
+          url: 'https://example.atlassian.net/browse/PROJ-123',
+          labels: ['backend', 'urgent'],
+        },
+      });
+    });
+
+    it('removes a single label and returns the resulting labels', async () => {
+      let received: any;
+      server.use(
+        http.put(
+          'https://example.atlassian.net/rest/api/3/issue/PROJ-123',
+          async ({ request }) => {
+            received = await request.json();
+            return new HttpResponse(null, { status: 204 });
+          },
+        ),
+        http.get(
+          'https://example.atlassian.net/rest/api/3/issue/PROJ-123',
+          () =>
+            HttpResponse.json({
+              key: 'PROJ-123',
+              fields: { labels: ['backend'] },
+            }),
+        ),
+      );
+
+      const result = await makeRegistry([cloudConnection]).invoke({
+        id: 'test:remove-label',
+        input: { issueKey: 'PROJ-123', label: 'urgent' },
+      });
+
+      expect(received).toEqual({
+        update: { labels: [{ remove: 'urgent' }] },
+      });
+      expect(result).toEqual({
+        output: {
+          key: 'PROJ-123',
+          url: 'https://example.atlassian.net/browse/PROJ-123',
+          labels: ['backend'],
+        },
+      });
+    });
+
+    it('fails with NotFound for an unknown issue', async () => {
+      server.use(
+        http.put(
+          'https://example.atlassian.net/rest/api/3/issue/PROJ-999',
+          () =>
+            HttpResponse.json(
+              { errorMessages: ['Issue does not exist'] },
+              { status: 404 },
+            ),
+        ),
+      );
+
+      await expect(
+        makeRegistry([cloudConnection]).invoke({
+          id: 'test:add-label',
+          input: { issueKey: 'PROJ-999', label: 'urgent' },
+        }),
+      ).rejects.toThrow(/status 404.*Issue does not exist/);
+    });
+  });
+
+  describe('get-comments', () => {
+    const adfBody = {
+      type: 'doc',
+      version: 1,
+      content: [
+        {
+          type: 'paragraph',
+          content: [{ type: 'text', text: 'Looks good to me' }],
+        },
+      ],
+    };
+
+    it('reads comments with markdown bodies by default', async () => {
+      server.use(
+        http.get(
+          'https://example.atlassian.net/rest/api/3/issue/PROJ-123/comment',
+          () =>
+            HttpResponse.json({
+              comments: [
+                {
+                  id: 10001,
+                  author: { displayName: 'Jane Doe' },
+                  body: adfBody,
+                  created: '2026-08-01T10:00:00.000+0000',
+                  updated: '2026-08-02T10:00:00.000+0000',
+                },
+              ],
+            }),
+        ),
+      );
+
+      const result = await makeRegistry([cloudConnection]).invoke({
+        id: 'test:get-comments',
+        input: { issueKey: 'PROJ-123' },
+      });
+
+      expect(result).toEqual({
+        output: {
+          key: 'PROJ-123',
+          url: 'https://example.atlassian.net/browse/PROJ-123',
+          comments: [
+            {
+              id: '10001',
+              author: 'Jane Doe',
+              body: 'Looks good to me',
+              created: '2026-08-01T10:00:00.000+0000',
+              updated: '2026-08-02T10:00:00.000+0000',
+            },
+          ],
+        },
+      });
+    });
+
+    it('returns the raw adf document on request', async () => {
+      server.use(
+        http.get(
+          'https://example.atlassian.net/rest/api/3/issue/PROJ-123/comment',
+          () => HttpResponse.json({ comments: [{ id: 1, body: adfBody }] }),
+        ),
+      );
+
+      const result: any = await makeRegistry([cloudConnection]).invoke({
+        id: 'test:get-comments',
+        input: { issueKey: 'PROJ-123', bodyFormat: 'adf' },
+      });
+
+      expect(result.output.comments).toEqual([{ id: '1', body: adfBody }]);
+    });
+
+    it('fails with NotFound for an unknown issue', async () => {
+      server.use(
+        http.get(
+          'https://example.atlassian.net/rest/api/3/issue/PROJ-999/comment',
+          () =>
+            HttpResponse.json(
+              { errorMessages: ['Issue does not exist'] },
+              { status: 404 },
+            ),
+        ),
+      );
+
+      await expect(
+        makeRegistry([cloudConnection]).invoke({
+          id: 'test:get-comments',
+          input: { issueKey: 'PROJ-999' },
         }),
       ).rejects.toThrow(/status 404.*Issue does not exist/);
     });
@@ -617,7 +1048,16 @@ describe('jira work item actions', () => {
       });
 
       expect(result).toEqual({
-        output: { projects: [{ id: '10000', key: 'PROJ', name: 'Project' }] },
+        output: {
+          projects: [
+            {
+              id: '10000',
+              key: 'PROJ',
+              name: 'Project',
+              url: 'https://example.atlassian.net/browse/PROJ',
+            },
+          ],
+        },
       });
     });
 
@@ -637,7 +1077,89 @@ describe('jira work item actions', () => {
       });
 
       expect(result).toEqual({
-        output: { projects: [{ id: '1', key: 'OPS', name: 'Operations' }] },
+        output: {
+          projects: [
+            {
+              id: '1',
+              key: 'OPS',
+              name: 'Operations',
+              url: 'https://jira.example.com/browse/OPS',
+            },
+          ],
+        },
+      });
+    });
+
+    it('filters projects by name and returns descriptions', async () => {
+      let query: URLSearchParams | undefined;
+      server.use(
+        http.get(
+          'https://example.atlassian.net/rest/api/3/project/search',
+          ({ request }) => {
+            query = new URL(request.url).searchParams;
+            return HttpResponse.json({
+              values: [
+                {
+                  id: 10000,
+                  key: 'PLAT',
+                  name: 'Platform',
+                  description: 'The platform project',
+                },
+                { id: 10001, key: 'OTHER', name: 'Other' },
+              ],
+            });
+          },
+        ),
+      );
+
+      const result = await makeRegistry([cloudConnection]).invoke({
+        id: 'test:list-projects',
+        input: { name: 'plat' },
+      });
+
+      expect(query?.get('query')).toBe('plat');
+      expect(query?.get('expand')).toBe('description');
+      expect(result).toEqual({
+        output: {
+          projects: [
+            {
+              id: '10000',
+              key: 'PLAT',
+              name: 'Platform',
+              description: 'The platform project',
+              url: 'https://example.atlassian.net/browse/PLAT',
+            },
+          ],
+        },
+      });
+    });
+
+    it('filters projects client-side on datacenter', async () => {
+      server.use(
+        http.get('https://jira.example.com/rest/api/2/project', () =>
+          HttpResponse.json([
+            { id: '1', key: 'OPS', name: 'Operations' },
+            { id: '2', key: 'PLAT', name: 'Platform' },
+          ]),
+        ),
+      );
+
+      const result = await makeRegistry([datacenterConnection]).invoke({
+        id: 'test:list-projects',
+        input: { name: 'plat' },
+      });
+
+      expect(result).toEqual({
+        output: {
+          projects: [
+            {
+              id: '2',
+              key: 'PLAT',
+              name: 'Platform',
+              url: 'https://jira.example.com/browse/PLAT',
+            },
+          ],
+        },
       });
     });
 
@@ -914,16 +1436,901 @@ describe('jira work item actions', () => {
     });
   });
 
-  it('lists all eight actions with schemas and read-only attributes', async () => {
+  describe('search-users', () => {
+    it('finds users and returns assignable ids', async () => {
+      server.use(
+        http.get('https://example.atlassian.net/rest/api/3/user/search', () =>
+          HttpResponse.json([
+            {
+              accountId: 'acc-1',
+              displayName: 'Jane Doe',
+              emailAddress: 'jane@example.com',
+              active: true,
+            },
+          ]),
+        ),
+      );
+
+      const result = await makeRegistry([cloudConnection]).invoke({
+        id: 'test:search-users',
+        input: { query: 'jane' },
+      });
+
+      expect(result).toEqual({
+        output: {
+          users: [
+            {
+              id: 'acc-1',
+              displayName: 'Jane Doe',
+              email: 'jane@example.com',
+              active: true,
+            },
+          ],
+        },
+      });
+    });
+
+    it('returns an empty array when nothing matches', async () => {
+      server.use(
+        http.get('https://example.atlassian.net/rest/api/3/user/search', () =>
+          HttpResponse.json([]),
+        ),
+      );
+
+      const result = await makeRegistry([cloudConnection]).invoke({
+        id: 'test:search-users',
+        input: { query: 'nobody' },
+      });
+
+      expect(result).toEqual({ output: { users: [] } });
+    });
+  });
+
+  describe('list-transitions', () => {
+    it('lists the currently available transitions', async () => {
+      server.use(
+        http.get(
+          'https://example.atlassian.net/rest/api/3/issue/PROJ-1/transitions',
+          () =>
+            HttpResponse.json({
+              transitions: [
+                { id: 11, name: 'Start', to: { name: 'In Progress' } },
+                { id: 21, name: 'Finish', to: { name: 'Done' } },
+              ],
+            }),
+        ),
+      );
+
+      const result = await makeRegistry([cloudConnection]).invoke({
+        id: 'test:list-transitions',
+        input: { issueKey: 'PROJ-1' },
+      });
+
+      expect(result).toEqual({
+        output: {
+          key: 'PROJ-1',
+          transitions: [
+            { id: '11', name: 'Start', toStatus: 'In Progress' },
+            { id: '21', name: 'Finish', toStatus: 'Done' },
+          ],
+        },
+      });
+    });
+
+    it('fails with NotFound for an unknown issue', async () => {
+      server.use(
+        http.get(
+          'https://example.atlassian.net/rest/api/3/issue/PROJ-999/transitions',
+          () =>
+            HttpResponse.json(
+              { errorMessages: ['Issue does not exist'] },
+              { status: 404 },
+            ),
+        ),
+      );
+
+      await expect(
+        makeRegistry([cloudConnection]).invoke({
+          id: 'test:list-transitions',
+          input: { issueKey: 'PROJ-999' },
+        }),
+      ).rejects.toThrow(/status 404.*Issue does not exist/);
+    });
+  });
+
+  describe('issue links', () => {
+    const linkTypes = {
+      issueLinkTypes: [
+        { id: '1', name: 'Blocks', inward: 'is blocked by', outward: 'blocks' },
+      ],
+    };
+
+    it('lists link types', async () => {
+      server.use(
+        http.get('https://example.atlassian.net/rest/api/3/issueLinkType', () =>
+          HttpResponse.json(linkTypes),
+        ),
+      );
+
+      const result = await makeRegistry([cloudConnection]).invoke({
+        id: 'test:list-link-types',
+        input: {},
+      });
+
+      expect(result).toEqual({
+        output: {
+          linkTypes: [
+            {
+              id: '1',
+              name: 'Blocks',
+              inward: 'is blocked by',
+              outward: 'blocks',
+            },
+          ],
+        },
+      });
+    });
+
+    it('links two issues by type name', async () => {
+      let received: any;
+      server.use(
+        http.get('https://example.atlassian.net/rest/api/3/issueLinkType', () =>
+          HttpResponse.json(linkTypes),
+        ),
+        http.post(
+          'https://example.atlassian.net/rest/api/3/issueLink',
+          async ({ request }) => {
+            received = await request.json();
+            return new HttpResponse(null, { status: 201 });
+          },
+        ),
+      );
+
+      const result = await makeRegistry([cloudConnection]).invoke({
+        id: 'test:link-work-items',
+        input: { issueKey: 'PROJ-1', targetKey: 'PROJ-2', linkType: 'Blocks' },
+      });
+
+      expect(received).toEqual({
+        type: { name: 'Blocks' },
+        outwardIssue: { key: 'PROJ-1' },
+        inwardIssue: { key: 'PROJ-2' },
+      });
+      expect(result).toEqual({
+        output: {
+          key: 'PROJ-1',
+          targetKey: 'PROJ-2',
+          linkType: 'Blocks',
+          url: 'https://example.atlassian.net/browse/PROJ-1',
+        },
+      });
+    });
+
+    it('reverses the direction for an inward description', async () => {
+      let received: any;
+      server.use(
+        http.get('https://example.atlassian.net/rest/api/3/issueLinkType', () =>
+          HttpResponse.json(linkTypes),
+        ),
+        http.post(
+          'https://example.atlassian.net/rest/api/3/issueLink',
+          async ({ request }) => {
+            received = await request.json();
+            return new HttpResponse(null, { status: 201 });
+          },
+        ),
+      );
+
+      await makeRegistry([cloudConnection]).invoke({
+        id: 'test:link-work-items',
+        input: {
+          issueKey: 'PROJ-1',
+          targetKey: 'PROJ-2',
+          linkType: 'is blocked by',
+        },
+      });
+
+      expect(received).toEqual({
+        type: { name: 'Blocks' },
+        outwardIssue: { key: 'PROJ-2' },
+        inwardIssue: { key: 'PROJ-1' },
+      });
+    });
+
+    it('rejects an unknown link type listing the available ones', async () => {
+      server.use(
+        http.get('https://example.atlassian.net/rest/api/3/issueLinkType', () =>
+          HttpResponse.json(linkTypes),
+        ),
+      );
+
+      await expect(
+        makeRegistry([cloudConnection]).invoke({
+          id: 'test:link-work-items',
+          input: { issueKey: 'PROJ-1', targetKey: 'PROJ-2', linkType: 'nope' },
+        }),
+      ).rejects.toThrow(/Unknown Jira issue link type "nope".*Blocks/);
+    });
+
+    it('propagates Jira errors for unknown issues', async () => {
+      server.use(
+        http.get('https://example.atlassian.net/rest/api/3/issueLinkType', () =>
+          HttpResponse.json(linkTypes),
+        ),
+        http.post('https://example.atlassian.net/rest/api/3/issueLink', () =>
+          HttpResponse.json(
+            { errorMessages: ['Issue does not exist'] },
+            { status: 404 },
+          ),
+        ),
+      );
+
+      await expect(
+        makeRegistry([cloudConnection]).invoke({
+          id: 'test:link-work-items',
+          input: {
+            issueKey: 'PROJ-1',
+            targetKey: 'PROJ-999',
+            linkType: 'Blocks',
+          },
+        }),
+      ).rejects.toThrow(/status 404.*Issue does not exist/);
+    });
+  });
+
+  describe('list-fields', () => {
+    it('lists fields and filters by name', async () => {
+      server.use(
+        http.get('https://example.atlassian.net/rest/api/3/field', () =>
+          HttpResponse.json([
+            {
+              id: 'customfield_10020',
+              name: 'Story Points',
+              custom: true,
+              schema: { type: 'number' },
+            },
+            { id: 'summary', name: 'Summary', custom: false },
+          ]),
+        ),
+      );
+
+      const registry = makeRegistry([cloudConnection]);
+      const all: any = await registry.invoke({
+        id: 'test:list-fields',
+        input: {},
+      });
+      expect(all.output.fields).toHaveLength(2);
+
+      const filtered = await registry.invoke({
+        id: 'test:list-fields',
+        input: { name: 'story' },
+      });
+      expect(filtered).toEqual({
+        output: {
+          fields: [
+            {
+              id: 'customfield_10020',
+              name: 'Story Points',
+              custom: true,
+              type: 'number',
+            },
+          ],
+        },
+      });
+    });
+  });
+
+  describe('worklogs', () => {
+    const adfComment = {
+      type: 'doc',
+      version: 1,
+      content: [
+        { type: 'paragraph', content: [{ type: 'text', text: 'pairing' }] },
+      ],
+    };
+
+    it('reads worklogs with markdown comments by default', async () => {
+      server.use(
+        http.get(
+          'https://example.atlassian.net/rest/api/3/issue/PROJ-1/worklog',
+          () =>
+            HttpResponse.json({
+              worklogs: [
+                {
+                  id: 100,
+                  author: { displayName: 'Jane Doe' },
+                  timeSpent: '2h',
+                  timeSpentSeconds: 7200,
+                  started: '2026-08-01T09:00:00.000+0000',
+                  comment: adfComment,
+                },
+              ],
+            }),
+        ),
+      );
+
+      const result = await makeRegistry([cloudConnection]).invoke({
+        id: 'test:get-worklogs',
+        input: { issueKey: 'PROJ-1' },
+      });
+
+      expect(result).toEqual({
+        output: {
+          key: 'PROJ-1',
+          url: 'https://example.atlassian.net/browse/PROJ-1',
+          worklogs: [
+            {
+              id: '100',
+              author: 'Jane Doe',
+              timeSpent: '2h',
+              timeSpentSeconds: 7200,
+              started: '2026-08-01T09:00:00.000+0000',
+              comment: 'pairing',
+            },
+          ],
+        },
+      });
+    });
+
+    it('logs time with a markdown comment', async () => {
+      let received: any;
+      server.use(
+        http.post(
+          'https://example.atlassian.net/rest/api/3/issue/PROJ-1/worklog',
+          async ({ request }) => {
+            received = await request.json();
+            return HttpResponse.json({ id: 101 }, { status: 201 });
+          },
+        ),
+      );
+
+      const result = await makeRegistry([cloudConnection]).invoke({
+        id: 'test:add-worklog',
+        input: { issueKey: 'PROJ-1', timeSpent: '2h 30m', comment: 'pairing' },
+      });
+
+      expect(received.timeSpent).toBe('2h 30m');
+      expect(received.comment.type).toBe('doc');
+      expect(result).toEqual({
+        output: {
+          key: 'PROJ-1',
+          worklogId: '101',
+          url: 'https://example.atlassian.net/browse/PROJ-1',
+        },
+      });
+    });
+
+    it('propagates an invalid duration error', async () => {
+      server.use(
+        http.post(
+          'https://example.atlassian.net/rest/api/3/issue/PROJ-1/worklog',
+          () =>
+            HttpResponse.json(
+              { errors: { timeLogged: 'Invalid time duration entered' } },
+              { status: 400 },
+            ),
+        ),
+      );
+
+      await expect(
+        makeRegistry([cloudConnection]).invoke({
+          id: 'test:add-worklog',
+          input: { issueKey: 'PROJ-1', timeSpent: 'nonsense' },
+        }),
+      ).rejects.toThrow(/Invalid time duration/);
+    });
+
+    it('fails with NotFound for an unknown issue', async () => {
+      server.use(
+        http.get(
+          'https://example.atlassian.net/rest/api/3/issue/PROJ-999/worklog',
+          () =>
+            HttpResponse.json(
+              { errorMessages: ['Issue does not exist'] },
+              { status: 404 },
+            ),
+        ),
+      );
+
+      await expect(
+        makeRegistry([cloudConnection]).invoke({
+          id: 'test:get-worklogs',
+          input: { issueKey: 'PROJ-999' },
+        }),
+      ).rejects.toThrow(/status 404.*Issue does not exist/);
+    });
+  });
+
+  describe('watchers', () => {
+    it('adds a watcher on cloud', async () => {
+      let rawBody: string | undefined;
+      server.use(
+        http.post(
+          'https://example.atlassian.net/rest/api/3/issue/PROJ-1/watchers',
+          async ({ request }) => {
+            rawBody = await request.text();
+            return new HttpResponse(null, { status: 204 });
+          },
+        ),
+      );
+
+      const result = await makeRegistry([cloudConnection]).invoke({
+        id: 'test:add-watcher',
+        input: { issueKey: 'PROJ-1', user: 'acc-1' },
+      });
+
+      expect(rawBody).toBe('"acc-1"');
+      expect(result).toEqual({
+        output: {
+          key: 'PROJ-1',
+          url: 'https://example.atlassian.net/browse/PROJ-1',
+        },
+      });
+    });
+
+    it('removes a watcher on datacenter via username', async () => {
+      let params: URLSearchParams | undefined;
+      server.use(
+        http.delete(
+          'https://jira.example.com/rest/api/2/issue/OPS-1/watchers',
+          ({ request }) => {
+            params = new URL(request.url).searchParams;
+            return new HttpResponse(null, { status: 204 });
+          },
+        ),
+      );
+
+      const result = await makeRegistry([datacenterConnection]).invoke({
+        id: 'test:remove-watcher',
+        input: { issueKey: 'OPS-1', user: 'jdoe' },
+      });
+
+      expect(params?.get('username')).toBe('jdoe');
+      expect(result).toEqual({
+        output: { key: 'OPS-1', url: 'https://jira.example.com/browse/OPS-1' },
+      });
+    });
+
+    it('fails with NotFound for an unknown issue', async () => {
+      server.use(
+        http.post(
+          'https://example.atlassian.net/rest/api/3/issue/PROJ-999/watchers',
+          () =>
+            HttpResponse.json(
+              { errorMessages: ['Issue does not exist'] },
+              { status: 404 },
+            ),
+        ),
+      );
+
+      await expect(
+        makeRegistry([cloudConnection]).invoke({
+          id: 'test:add-watcher',
+          input: { issueKey: 'PROJ-999', user: 'acc-1' },
+        }),
+      ).rejects.toThrow(/status 404.*Issue does not exist/);
+    });
+  });
+
+  describe('agile actions', () => {
+    it('lists boards filtered by project', async () => {
+      let params: URLSearchParams | undefined;
+      server.use(
+        http.get(
+          'https://example.atlassian.net/rest/agile/1.0/board',
+          ({ request }) => {
+            params = new URL(request.url).searchParams;
+            return HttpResponse.json({
+              values: [{ id: 7, name: 'Platform board', type: 'scrum' }],
+            });
+          },
+        ),
+      );
+
+      const result = await makeRegistry([cloudConnection]).invoke({
+        id: 'test:list-boards',
+        input: { projectKey: 'PROJ' },
+      });
+
+      expect(params?.get('projectKeyOrId')).toBe('PROJ');
+      expect(result).toEqual({
+        output: {
+          boards: [{ id: '7', name: 'Platform board', type: 'scrum' }],
+        },
+      });
+    });
+
+    it('lists active sprints of a board', async () => {
+      let params: URLSearchParams | undefined;
+      server.use(
+        http.get(
+          'https://example.atlassian.net/rest/agile/1.0/board/7/sprint',
+          ({ request }) => {
+            params = new URL(request.url).searchParams;
+            return HttpResponse.json({
+              values: [{ id: 42, name: 'Sprint 12', state: 'active' }],
+            });
+          },
+        ),
+      );
+
+      const result = await makeRegistry([cloudConnection]).invoke({
+        id: 'test:list-sprints',
+        input: { boardId: '7', state: 'active' },
+      });
+
+      expect(params?.get('state')).toBe('active');
+      expect(result).toEqual({
+        output: {
+          sprints: [{ id: '42', name: 'Sprint 12', state: 'active' }],
+        },
+      });
+    });
+
+    it('fails with NotFound for an unknown board', async () => {
+      server.use(
+        http.get(
+          'https://example.atlassian.net/rest/agile/1.0/board/99/sprint',
+          () =>
+            HttpResponse.json(
+              { errorMessages: ['Board does not exist'] },
+              { status: 404 },
+            ),
+        ),
+      );
+
+      await expect(
+        makeRegistry([cloudConnection]).invoke({
+          id: 'test:list-sprints',
+          input: { boardId: '99' },
+        }),
+      ).rejects.toThrow(/board 99.*status 404/);
+    });
+
+    it('moves issues into a sprint', async () => {
+      let received: any;
+      server.use(
+        http.post(
+          'https://example.atlassian.net/rest/agile/1.0/sprint/42/issue',
+          async ({ request }) => {
+            received = await request.json();
+            return new HttpResponse(null, { status: 204 });
+          },
+        ),
+      );
+
+      const result = await makeRegistry([cloudConnection]).invoke({
+        id: 'test:move-to-sprint',
+        input: { sprintId: '42', issueKeys: ['PROJ-1', 'PROJ-2'] },
+      });
+
+      expect(received).toEqual({ issues: ['PROJ-1', 'PROJ-2'] });
+      expect(result).toEqual({
+        output: { sprintId: '42', issueKeys: ['PROJ-1', 'PROJ-2'] },
+      });
+    });
+
+    it('fails with NotFound for an unknown sprint', async () => {
+      server.use(
+        http.post(
+          'https://example.atlassian.net/rest/agile/1.0/sprint/99/issue',
+          () =>
+            HttpResponse.json(
+              { errorMessages: ['Sprint does not exist'] },
+              { status: 404 },
+            ),
+        ),
+      );
+
+      await expect(
+        makeRegistry([cloudConnection]).invoke({
+          id: 'test:move-to-sprint',
+          input: { sprintId: '99', issueKeys: ['PROJ-1'] },
+        }),
+      ).rejects.toThrow(/sprint 99.*status 404/);
+    });
+  });
+
+  describe('delete-work-item', () => {
+    it('deletes an issue', async () => {
+      let params: URLSearchParams | undefined;
+      server.use(
+        http.delete(
+          'https://example.atlassian.net/rest/api/3/issue/PROJ-1',
+          ({ request }) => {
+            params = new URL(request.url).searchParams;
+            return new HttpResponse(null, { status: 204 });
+          },
+        ),
+      );
+
+      const result = await makeRegistry([cloudConnection]).invoke({
+        id: 'test:delete-work-item',
+        input: { issueKey: 'PROJ-1' },
+      });
+
+      expect(params?.get('deleteSubtasks')).toBe('false');
+      expect(result).toEqual({ output: { key: 'PROJ-1' } });
+    });
+
+    it('propagates a sub-task rejection', async () => {
+      server.use(
+        http.delete(
+          'https://example.atlassian.net/rest/api/3/issue/PROJ-1',
+          () =>
+            HttpResponse.json(
+              { errorMessages: ['The issue has sub-tasks'] },
+              { status: 400 },
+            ),
+        ),
+      );
+
+      await expect(
+        makeRegistry([cloudConnection]).invoke({
+          id: 'test:delete-work-item',
+          input: { issueKey: 'PROJ-1' },
+        }),
+      ).rejects.toThrow(/sub-tasks/);
+    });
+
+    it('fails with NotFound for an unknown issue', async () => {
+      server.use(
+        http.delete(
+          'https://example.atlassian.net/rest/api/3/issue/PROJ-999',
+          () =>
+            HttpResponse.json(
+              { errorMessages: ['Issue does not exist'] },
+              { status: 404 },
+            ),
+        ),
+      );
+
+      await expect(
+        makeRegistry([cloudConnection]).invoke({
+          id: 'test:delete-work-item',
+          input: { issueKey: 'PROJ-999' },
+        }),
+      ).rejects.toThrow(/status 404.*Issue does not exist/);
+    });
+  });
+
+  describe('custom fields', () => {
+    it('creates with custom fields passed verbatim', async () => {
+      let received: any;
+      server.use(
+        http.post(
+          'https://example.atlassian.net/rest/api/3/issue',
+          async ({ request }) => {
+            received = await request.json();
+            return HttpResponse.json(
+              { id: '1', key: 'PROJ-1' },
+              { status: 201 },
+            );
+          },
+        ),
+      );
+
+      await makeRegistry([cloudConnection]).invoke({
+        id: 'test:create-work-item',
+        input: {
+          projectKey: 'PROJ',
+          issueType: 'Story',
+          summary: 'x',
+          customFields: { customfield_10020: 5 },
+        },
+      });
+
+      expect(received.fields.customfield_10020).toBe(5);
+    });
+
+    it('accepts an update with only custom fields', async () => {
+      let received: any;
+      server.use(
+        http.put(
+          'https://example.atlassian.net/rest/api/3/issue/PROJ-1',
+          async ({ request }) => {
+            received = await request.json();
+            return new HttpResponse(null, { status: 204 });
+          },
+        ),
+      );
+
+      const result = await makeRegistry([cloudConnection]).invoke({
+        id: 'test:update-work-item',
+        input: {
+          issueKey: 'PROJ-1',
+          customFields: { customfield_10020: 8 },
+        },
+      });
+
+      expect(received).toEqual({ fields: { customfield_10020: 8 } });
+      expect(result).toEqual({
+        output: {
+          key: 'PROJ-1',
+          url: 'https://example.atlassian.net/browse/PROJ-1',
+        },
+      });
+    });
+
+    it('reads selected custom fields and links on get-work-item', async () => {
+      server.use(
+        http.get('https://example.atlassian.net/rest/api/3/issue/PROJ-1', () =>
+          HttpResponse.json({
+            key: 'PROJ-1',
+            fields: {
+              summary: 'x',
+              status: { name: 'To Do' },
+              issuetype: { name: 'Story' },
+              customfield_10020: 5,
+              issuelinks: [
+                {
+                  type: {
+                    name: 'Blocks',
+                    inward: 'is blocked by',
+                    outward: 'blocks',
+                  },
+                  outwardIssue: { key: 'PROJ-2' },
+                },
+              ],
+            },
+          }),
+        ),
+      );
+
+      const result: any = await makeRegistry([cloudConnection]).invoke({
+        id: 'test:get-work-item',
+        input: { issueKey: 'PROJ-1', customFields: ['customfield_10020'] },
+      });
+
+      expect(result.output.customFields).toEqual({ customfield_10020: 5 });
+      expect(result.output.links).toEqual([
+        { type: 'Blocks', direction: 'blocks', key: 'PROJ-2' },
+      ]);
+    });
+  });
+
+  describe('pagination', () => {
+    it('pages search results with tokens', async () => {
+      let received: any;
+      server.use(
+        http.post(
+          'https://example.atlassian.net/rest/api/3/search/jql',
+          async ({ request }) => {
+            received = await request.json();
+            return HttpResponse.json({
+              issues: [{ key: 'PROJ-2', fields: { summary: 'second' } }],
+              nextPageToken: 'token-2',
+            });
+          },
+        ),
+      );
+
+      const result: any = await makeRegistry([cloudConnection]).invoke({
+        id: 'test:search-work-items',
+        input: { projectKey: 'PROJ', pageToken: 'token-1' },
+      });
+
+      expect(received.nextPageToken).toBe('token-1');
+      expect(result.output.nextPageToken).toBe('token-2');
+    });
+
+    it('pages comments and omits the token on the last page', async () => {
+      server.use(
+        http.get(
+          'https://example.atlassian.net/rest/api/3/issue/PROJ-1/comment',
+          ({ request }) => {
+            const startAt = Number(
+              new URL(request.url).searchParams.get('startAt'),
+            );
+            return HttpResponse.json({
+              comments: [{ id: startAt + 1, body: 'c' }],
+              total: 2,
+            });
+          },
+        ),
+      );
+
+      const registry = makeRegistry([cloudConnection]);
+      const first: any = await registry.invoke({
+        id: 'test:get-comments',
+        input: { issueKey: 'PROJ-1', maxResults: 1 },
+      });
+      expect(first.output.nextPageToken).toBe('1');
+
+      const second: any = await registry.invoke({
+        id: 'test:get-comments',
+        input: {
+          issueKey: 'PROJ-1',
+          maxResults: 1,
+          pageToken: first.output.nextPageToken,
+        },
+      });
+      expect(second.output.comments[0].id).toBe('2');
+      expect(second.output.nextPageToken).toBeUndefined();
+    });
+
+    it('rejects an invalid page token on offset-based paging', async () => {
+      await expect(
+        makeRegistry([cloudConnection]).invoke({
+          id: 'test:get-comments',
+          input: { issueKey: 'PROJ-1', pageToken: 'garbage' },
+        }),
+      ).rejects.toThrow(/Invalid pageToken "garbage"/);
+    });
+  });
+
+  describe('permission gating', () => {
+    it('rejects a denied caller before any Jira call', async () => {
+      let called = false;
+      server.use(
+        http.post('https://example.atlassian.net/rest/api/3/issue', () => {
+          called = true;
+          return HttpResponse.json({ id: '1', key: 'PROJ-1' }, { status: 201 });
+        }),
+      );
+
+      const registry = makeRegistry(
+        [cloudConnection],
+        [],
+        mockServices.permissions({ result: AuthorizeResult.DENY }),
+      );
+
+      await expect(
+        registry.invoke({
+          id: 'test:create-work-item',
+          input: { projectKey: 'PROJ', issueType: 'Bug', summary: 'x' },
+        }),
+      ).rejects.toThrow(/not allowed.*jira\.work-item\.write/);
+      await expect(
+        registry.invoke({ id: 'test:list-projects', input: {} }),
+      ).rejects.toThrow(/jira\.work-item\.read/);
+      expect(called).toBe(false);
+    });
+
+    it('allows all actions under the default policy', async () => {
+      server.use(
+        http.get(
+          'https://example.atlassian.net/rest/api/3/project/search',
+          () => HttpResponse.json({ values: [] }),
+        ),
+      );
+
+      const result: any = await makeRegistry([cloudConnection]).invoke({
+        id: 'test:list-projects',
+        input: {},
+      });
+      expect(result.output.projects).toEqual([]);
+    });
+  });
+
+  it('lists all twenty-six actions with schemas and attributes', async () => {
     const { actions } = await makeRegistry([cloudConnection]).list();
     const ids = actions.map(a => a.id).sort();
     expect(ids).toEqual([
       'test:add-comment',
+      'test:add-label',
+      'test:add-watcher',
+      'test:add-worklog',
       'test:create-work-item',
+      'test:delete-work-item',
+      'test:get-comments',
       'test:get-work-item',
+      'test:get-worklogs',
+      'test:link-work-items',
+      'test:list-boards',
+      'test:list-fields',
       'test:list-issue-types',
+      'test:list-link-types',
       'test:list-projects',
+      'test:list-sprints',
+      'test:list-transitions',
+      'test:move-to-sprint',
+      'test:remove-label',
+      'test:remove-watcher',
+      'test:rename-work-item',
+      'test:search-users',
       'test:search-work-items',
+      'test:set-work-item-parent',
       'test:transition-work-item',
       'test:update-work-item',
     ]);
@@ -932,15 +2339,26 @@ describe('jira work item actions', () => {
       .map(a => a.id)
       .sort();
     expect(readOnlyActions).toEqual([
+      'test:get-comments',
       'test:get-work-item',
+      'test:get-worklogs',
+      'test:list-boards',
+      'test:list-fields',
       'test:list-issue-types',
+      'test:list-link-types',
       'test:list-projects',
+      'test:list-sprints',
+      'test:list-transitions',
+      'test:search-users',
       'test:search-work-items',
     ]);
+    const destructiveActions = actions
+      .filter(a => a.attributes.destructive)
+      .map(a => a.id);
+    expect(destructiveActions).toEqual(['test:delete-work-item']);
     for (const action of actions) {
       expect(action.schema.input).toBeDefined();
       expect(action.schema.output).toBeDefined();
-      expect(action.attributes.destructive).toBe(false);
     }
   });
 });

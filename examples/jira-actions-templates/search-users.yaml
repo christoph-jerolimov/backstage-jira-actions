@@ -1,0 +1,50 @@
+apiVersion: scaffolder.backstage.io/v1beta3
+kind: Template
+metadata:
+  name: 'jira-test-search-users'
+  title: 'Jira Test: Search Users'
+  description: 'Finds Jira users by name, email, or username via the jira-actions:search-users action.'
+  tags:
+    - jira
+    - test
+spec:
+  owner: user:guest
+  type: jira-test
+  parameters:
+    - title: Search users
+      required:
+        - query
+      properties:
+        query:
+          title: 'Query'
+          type: string
+          description: 'The search text, matched against display names, emails, and usernames'
+        maxResults:
+          title: 'Maximum results'
+          type: number
+          description: 'Maximum number of users to return, default 25'
+        host:
+          title: 'Jira host'
+          type: string
+          description: 'Only needed when multiple Jira connections are configured'
+  steps:
+    - id: invoke
+      name: 'Search users'
+      action: jira-actions:search-users
+      input:
+        query: ${{ parameters.query }}
+        maxResults: ${{ parameters.maxResults }}
+        host: ${{ parameters.host }}
+  output:
+    text:
+      - title: 'Users'
+        content: |
+          | Name | ID | Email |
+          | --- | --- | --- |
+          {% for u in steps.invoke.output.users %}| ${{ u.displayName }} | ${{ u.id }} | ${{ u.email }} |
+          {% endfor %}
+      - title: 'JSON'
+        content: |
+          ```json
+          ${{ steps.invoke.output | dump(2) }}
+          ```

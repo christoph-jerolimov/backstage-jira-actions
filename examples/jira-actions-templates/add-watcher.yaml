@@ -1,0 +1,48 @@
+apiVersion: scaffolder.backstage.io/v1beta3
+kind: Template
+metadata:
+  name: 'jira-test-add-watcher'
+  title: 'Jira Test: Add Watcher'
+  description: 'Adds a user as a watcher of a Jira work item via the jira-actions:add-watcher action.'
+  tags:
+    - jira
+    - test
+spec:
+  owner: user:guest
+  type: jira-test
+  parameters:
+    - title: Add watcher
+      required:
+        - issueKey
+        - user
+      properties:
+        issueKey:
+          title: 'Issue key'
+          type: string
+          description: 'The key of the issue, e.g. PROJ-123'
+        user:
+          title: 'User'
+          type: string
+          description: 'A Jira account ID (Cloud) or username (Data Center), as returned by search-users'
+        host:
+          title: 'Jira host'
+          type: string
+          description: 'Only needed when multiple Jira connections are configured'
+  steps:
+    - id: invoke
+      name: 'Add watcher'
+      action: jira-actions:add-watcher
+      input:
+        issueKey: ${{ parameters.issueKey }}
+        user: ${{ parameters.user }}
+        host: ${{ parameters.host }}
+  output:
+    links:
+      - title: Open issue
+        url: ${{ steps.invoke.output.url }}
+    text:
+      - title: Result
+        content: |
+          ```json
+          ${{ steps.invoke.output | dump(2) }}
+          ```

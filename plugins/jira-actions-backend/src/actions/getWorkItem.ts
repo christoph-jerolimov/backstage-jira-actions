@@ -1,12 +1,15 @@
+import { PermissionsService } from '@backstage/backend-plugin-api';
 import { ActionsRegistryService } from '@backstage/backend-plugin-api/alpha';
 import { JiraClient } from '../lib/JiraClient';
 import { JiraConnectionsReader } from '../lib/connections';
+import { assertPermission, jiraWorkItemReadPermission } from '../permissions';
 
 export function registerGetWorkItemAction(options: {
   actionsRegistry: ActionsRegistryService;
   connections: JiraConnectionsReader;
+  permissions: PermissionsService;
 }) {
-  const { actionsRegistry, connections } = options;
+  const { actionsRegistry, connections, permissions } = options;
 
   actionsRegistry.register({
     name: 'get-work-item',
@@ -29,6 +32,12 @@ export function registerGetWorkItemAction(options: {
             .optional()
             .describe(
               'How to render the description: "markdown" (default), "adf" for the raw ADF document, or "text" for plain text with formatting dropped',
+            ),
+          customFields: z
+            .array(z.string())
+            .optional()
+            .describe(
+              'Jira field IDs (e.g. "customfield_10020", discoverable via list-fields) to read in addition to the standard fields',
             ),
           host: z
             .string()
@@ -66,14 +75,40 @@ export function registerGetWorkItemAction(options: {
             .string()
             .optional()
             .describe('When the issue was last updated'),
+          links: z
+            .array(
+              z.object({
+                type: z.string().describe('The link type name, e.g. "Blocks"'),
+                direction: z
+                  .string()
+                  .describe(
+                    'The relation as it reads from this issue, e.g. "blocks" or "is blocked by"',
+                  ),
+                key: z.string().describe('The linked issue key'),
+              }),
+            )
+            .optional()
+            .describe("The issue's links to other issues"),
+          customFields: z
+            .record(z.any())
+            .optional()
+            .describe(
+              'The requested custom field values, keyed by field ID; present when custom fields were requested',
+            ),
         }),
     },
-    action: async ({ input }) => {
+    action: async ({ input, credentials }) => {
+      await assertPermission(
+        permissions,
+        jiraWorkItemReadPermission,
+        credentials,
+      );
       const connection = connections.find({ host: input.host });
       const client = new JiraClient(connection);
       return {
         output: await client.getIssue(input.issueKey, {
           descriptionFormat: input.descriptionFormat ?? 'markdown',
+          customFields: input.customFields,
         }),
       };
     },
