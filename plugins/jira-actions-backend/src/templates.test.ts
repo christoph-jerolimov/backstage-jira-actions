@@ -45,6 +45,10 @@ const REQUIRED_INPUTS: Record<string, string[]> = {
   'list-sprint-work-items': ['sprintId'],
   'get-sprint-insights': ['sprintId'],
   'move-to-backlog': ['issueKeys'],
+  'create-sprint': ['boardId', 'name'],
+  'update-sprint': ['sprintId'],
+  'start-sprint': ['sprintId'],
+  'complete-sprint': ['sprintId'],
   'move-to-sprint': ['sprintId', 'issueKeys'],
 };
 

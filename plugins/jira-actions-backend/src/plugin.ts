@@ -6,11 +6,15 @@ import { actionsRegistryServiceRef } from '@backstage/backend-plugin-api/alpha';
 import { catalogServiceRef } from '@backstage/plugin-catalog-node';
 import { registerAddCommentAction } from './actions/addComment';
 import {
+  registerCompleteSprintAction,
+  registerCreateSprintAction,
   registerListBoardsAction,
   registerListSprintsAction,
   registerListSprintWorkItemsAction,
   registerMoveToBacklogAction,
   registerMoveToSprintAction,
+  registerStartSprintAction,
+  registerUpdateSprintAction,
 } from './actions/agile';
 import {
   registerDeleteCommentAction,
@@ -118,6 +122,10 @@ export const jiraActionsPlugin = createBackendPlugin({
         registerRemoveWatcherAction({ ...common, catalog });
         registerListBoardsAction(common);
         registerListSprintsAction(common);
+        registerCreateSprintAction(common);
+        registerUpdateSprintAction(common);
+        registerStartSprintAction(common);
+        registerCompleteSprintAction(common);
         registerListSprintWorkItemsAction(common);
         registerGetSprintInsightsAction(common);
         registerMoveToSprintAction(common);

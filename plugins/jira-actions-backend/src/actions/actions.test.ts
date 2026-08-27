@@ -11,11 +11,15 @@ import { http, HttpResponse } from 'msw';
 import { setupServer } from 'msw/node';
 import { registerAddCommentAction } from './addComment';
 import {
+  registerCompleteSprintAction,
+  registerCreateSprintAction,
   registerListBoardsAction,
   registerListSprintsAction,
   registerListSprintWorkItemsAction,
   registerMoveToBacklogAction,
   registerMoveToSprintAction,
+  registerStartSprintAction,
+  registerUpdateSprintAction,
 } from './agile';
 import {
   registerDeleteCommentAction,
@@ -159,6 +163,10 @@ function makeRegistry(
   registerListSprintWorkItemsAction(common);
   registerGetSprintInsightsAction(common);
   registerMoveToBacklogAction(common);
+  registerCreateSprintAction(common);
+  registerUpdateSprintAction(common);
+  registerStartSprintAction(common);
+  registerCompleteSprintAction(common);
   return actionsRegistry;
 }
 
@@ -2951,6 +2959,171 @@ describe('jira work item actions', () => {
     });
   });
 
+  describe('sprint management', () => {
+    it('creates a sprint on a board', async () => {
+      let received: any;
+      server.use(
+        http.post(
+          'https://example.atlassian.net/rest/agile/1.0/sprint',
+          async ({ request }) => {
+            received = await request.json();
+            return HttpResponse.json(
+              { id: 43, name: 'Sprint 13', state: 'future' },
+              { status: 201 },
+            );
+          },
+        ),
+      );
+
+      const result = await makeRegistry([cloudConnection]).invoke({
+        id: 'test:create-sprint',
+        input: { boardId: '7', name: 'Sprint 13', goal: 'Ship more' },
+      });
+
+      expect(received).toEqual({
+        originBoardId: 7,
+        name: 'Sprint 13',
+        goal: 'Ship more',
+      });
+      expect(result).toEqual({
+        output: { id: '43', name: 'Sprint 13', state: 'future' },
+      });
+    });
+
+    it('changes only the goal on update', async () => {
+      let received: any;
+      server.use(
+        http.post(
+          'https://example.atlassian.net/rest/agile/1.0/sprint/43',
+          async ({ request }) => {
+            received = await request.json();
+            return HttpResponse.json({
+              id: 43,
+              name: 'Sprint 13',
+              state: 'future',
+              goal: 'New goal',
+            });
+          },
+        ),
+      );
+
+      const result: any = await makeRegistry([cloudConnection]).invoke({
+        id: 'test:update-sprint',
+        input: { sprintId: '43', goal: 'New goal' },
+      });
+
+      expect(received).toEqual({ goal: 'New goal' });
+      expect(result.output.goal).toBe('New goal');
+    });
+
+    it('rejects an update without any field', async () => {
+      await expect(
+        makeRegistry([cloudConnection]).invoke({
+          id: 'test:update-sprint',
+          input: { sprintId: '43' },
+        }),
+      ).rejects.toThrow(/At least one of/);
+    });
+
+    it('starts a sprint with dates', async () => {
+      let received: any;
+      server.use(
+        http.post(
+          'https://example.atlassian.net/rest/agile/1.0/sprint/43',
+          async ({ request }) => {
+            received = await request.json();
+            return HttpResponse.json({
+              id: 43,
+              name: 'Sprint 13',
+              state: 'active',
+            });
+          },
+        ),
+      );
+
+      const result: any = await makeRegistry([cloudConnection]).invoke({
+        id: 'test:start-sprint',
+        input: {
+          sprintId: '43',
+          startDate: '2026-08-27T00:00:00.000Z',
+          endDate: '2026-09-10T00:00:00.000Z',
+        },
+      });
+
+      expect(received).toEqual({
+        state: 'active',
+        startDate: '2026-08-27T00:00:00.000Z',
+        endDate: '2026-09-10T00:00:00.000Z',
+      });
+      expect(result.output.state).toBe('active');
+    });
+
+    it('propagates a rejected start', async () => {
+      server.use(
+        http.post(
+          'https://example.atlassian.net/rest/agile/1.0/sprint/43',
+          () =>
+            HttpResponse.json(
+              { errorMessages: ['A sprint is already active'] },
+              { status: 400 },
+            ),
+        ),
+      );
+
+      await expect(
+        makeRegistry([cloudConnection]).invoke({
+          id: 'test:start-sprint',
+          input: { sprintId: '43' },
+        }),
+      ).rejects.toThrow(/already active/);
+    });
+
+    it('completes a sprint', async () => {
+      let received: any;
+      server.use(
+        http.post(
+          'https://example.atlassian.net/rest/agile/1.0/sprint/43',
+          async ({ request }) => {
+            received = await request.json();
+            return HttpResponse.json({
+              id: 43,
+              name: 'Sprint 13',
+              state: 'closed',
+            });
+          },
+        ),
+      );
+
+      const result: any = await makeRegistry([cloudConnection]).invoke({
+        id: 'test:complete-sprint',
+        input: { sprintId: '43' },
+      });
+
+      expect(received).toEqual({ state: 'closed' });
+      expect(result.output.state).toBe('closed');
+    });
+
+    it('fails with NotFound for an unknown sprint', async () => {
+      server.use(
+        http.post(
+          'https://example.atlassian.net/rest/agile/1.0/sprint/99',
+          () =>
+            HttpResponse.json(
+              { errorMessages: ['Sprint does not exist'] },
+              { status: 404 },
+            ),
+        ),
+      );
+
+      await expect(
+        makeRegistry([cloudConnection]).invoke({
+          id: 'test:complete-sprint',
+          input: { sprintId: '99' },
+        }),
+      ).rejects.toThrow(/sprint 99.*status 404/);
+    });
+  });
+
   describe('permission gating', () => {
     it('rejects a denied caller before any Jira call', async () => {
       let called = false;
@@ -2995,7 +3168,7 @@ describe('jira work item actions', () => {
     });
   });
 
-  it('lists all thirty-six actions with schemas and attributes', async () => {
+  it('lists all forty actions with schemas and attributes', async () => {
     const { actions } = await makeRegistry([cloudConnection]).list();
     const ids = actions.map(a => a.id).sort();
     expect(ids).toEqual([
@@ -3004,6 +3177,8 @@ describe('jira work item actions', () => {
       'test:add-remote-link',
       'test:add-watcher',
       'test:add-worklog',
+      'test:complete-sprint',
+      'test:create-sprint',
       'test:create-version',
       'test:create-work-item',
       'test:delete-comment',
@@ -3032,8 +3207,10 @@ describe('jira work item actions', () => {
       'test:search-users',
       'test:search-work-items',
       'test:set-work-item-parent',
+      'test:start-sprint',
       'test:transition-work-item',
       'test:update-comment',
+      'test:update-sprint',
       'test:update-work-item',
     ]);
     const readOnlyActions = actions

@@ -39,5 +39,9 @@ spec:
     - ./list-sprints.yaml
     - ./list-sprint-work-items.yaml
     - ./get-sprint-insights.yaml
+    - ./create-sprint.yaml
+    - ./update-sprint.yaml
+    - ./start-sprint.yaml
+    - ./complete-sprint.yaml
     - ./move-to-sprint.yaml
     - ./move-to-backlog.yaml

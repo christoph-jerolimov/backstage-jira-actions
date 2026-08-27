@@ -1,0 +1,59 @@
+apiVersion: scaffolder.backstage.io/v1beta3
+kind: Template
+metadata:
+  name: 'jira-test-update-sprint'
+  title: 'Jira Test: Update Sprint'
+  description: 'Edits the name, goal, or dates of a Jira sprint via the jira-actions:update-sprint action.'
+  tags:
+    - jira
+    - test
+spec:
+  owner: user:guest
+  type: jira-test
+  parameters:
+    - title: Update sprint
+      required:
+        - sprintId
+      properties:
+        sprintId:
+          title: 'Sprint ID'
+          type: string
+          description: 'The ID of the sprint, as returned by list-sprints'
+        name:
+          title: 'New name'
+          type: string
+          description: 'The new sprint name'
+        goal:
+          title: 'New goal'
+          type: string
+          description: 'The new sprint goal'
+        startDate:
+          title: 'New start date'
+          type: string
+          description: 'The new start as an ISO timestamp'
+        endDate:
+          title: 'New end date'
+          type: string
+          description: 'The new end as an ISO timestamp'
+        host:
+          title: 'Jira host'
+          type: string
+          description: 'Only needed when multiple Jira connections are configured'
+  steps:
+    - id: invoke
+      name: 'Update sprint'
+      action: jira-actions:update-sprint
+      input:
+        sprintId: ${{ parameters.sprintId }}
+        name: ${{ parameters.name }}
+        goal: ${{ parameters.goal }}
+        startDate: ${{ parameters.startDate }}
+        endDate: ${{ parameters.endDate }}
+        host: ${{ parameters.host }}
+  output:
+    text:
+      - title: Result
+        content: |
+          ```json
+          ${{ steps.invoke.output | dump(2) }}
+          ```
