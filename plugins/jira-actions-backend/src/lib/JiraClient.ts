@@ -121,6 +121,11 @@ export type JiraProjectComponent = {
   lead?: string;
 };
 
+export type JiraSprintIssue = JiraSearchItem & {
+  statusCategory?: string;
+  assigneeName?: string;
+};
+
 export type JiraRemoteLink = {
   id: string;
   title: string;
@@ -175,9 +180,13 @@ type RawIssue = {
   key: string;
   fields?: {
     summary?: string;
-    status?: { name?: string };
+    status?: { name?: string; statusCategory?: { key?: string } };
     issuetype?: { name?: string };
-    assignee?: { accountId?: string; name?: string } | null;
+    assignee?: {
+      accountId?: string;
+      name?: string;
+      displayName?: string;
+    } | null;
     labels?: string[];
     description?: unknown;
     parent?: { key?: string };
@@ -1107,6 +1116,81 @@ export class JiraClient {
       endDate: sprint.endDate,
       goal: sprint.goal || undefined,
     }));
+  }
+
+  async getSprint(sprintId: string): Promise<JiraSprint> {
+    const response = await this.request(
+      'GET',
+      `/sprint/${encodeURIComponent(sprintId)}`,
+      { api: 'agile' },
+    );
+    if (!response.ok) {
+      await this.throwForResponse(response, `get Jira sprint ${sprintId}`);
+    }
+    const body = (await response.json()) as {
+      id: string | number;
+      name?: string;
+      state?: string;
+      startDate?: string;
+      endDate?: string;
+      goal?: string;
+    };
+    return {
+      id: String(body.id),
+      name: body.name ?? '',
+      state: body.state,
+      startDate: body.startDate,
+      endDate: body.endDate,
+      goal: body.goal || undefined,
+    };
+  }
+
+  async listSprintIssues(
+    sprintId: string,
+    options: { maxResults: number; pageToken?: string },
+  ): Promise<{ items: JiraSprintIssue[]; nextPageToken?: string }> {
+    const startAt = this.parseOffsetToken(options.pageToken);
+    const response = await this.request(
+      'GET',
+      `/sprint/${encodeURIComponent(sprintId)}/issue`,
+      {
+        api: 'agile',
+        query: {
+          maxResults: String(options.maxResults),
+          startAt: String(startAt),
+          fields: SEARCH_FIELDS.join(','),
+        },
+      },
+    );
+    if (!response.ok) {
+      await this.throwForResponse(
+        response,
+        `list issues of Jira sprint ${sprintId}`,
+      );
+    }
+    const body = (await response.json()) as {
+      issues?: RawIssue[];
+      total?: number;
+    };
+    const issues = body.issues ?? [];
+    return {
+      items: issues.map(issue => ({
+        ...this.toSearchItem(issue),
+        statusCategory: issue.fields?.status?.statusCategory?.key,
+        assigneeName: issue.fields?.assignee?.displayName || undefined,
+      })),
+      nextPageToken: this.nextOffsetToken(startAt, issues.length, body.total),
+    };
+  }
+
+  async moveToBacklog(issueKeys: string[]): Promise<void> {
+    const response = await this.request('POST', '/backlog/issue', {
+      api: 'agile',
+      body: { issues: issueKeys },
+    });
+    if (!response.ok) {
+      await this.throwForResponse(response, 'move Jira issues to the backlog');
+    }
   }
 
   async moveToSprint(sprintId: string, issueKeys: string[]): Promise<void> {

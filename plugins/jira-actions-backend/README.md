@@ -7,41 +7,44 @@ so that they can be invoked through the actions service and — via
 
 ## Actions
 
-| Action ID                           | Description                                                                                      |
-| ----------------------------------- | ------------------------------------------------------------------------------------------------ |
-| `jira-actions:create-work-item`     | Creates a work item (issue) such as a Story, Bug or Task in a Jira project.                      |
-| `jira-actions:update-work-item`     | Modifies fields (summary, description, labels, assignee, issue type) of an existing Jira issue.  |
-| `jira-actions:rename-work-item`     | Changes only the summary (title) of an issue.                                                    |
-| `jira-actions:set-work-item-parent` | Changes only the parent of an issue, e.g. to move it under a different epic.                     |
-| `jira-actions:delete-work-item`     | Permanently deletes an issue. The only action marked destructive.                                |
-| `jira-actions:get-work-item`        | Reads a single issue by key, including its links and selected custom fields. Read-only.          |
-| `jira-actions:search-work-items`    | Searches issues by raw JQL or simplified filters, with page cursors. Read-only.                  |
-| `jira-actions:search-users`         | Finds users and returns the identity value usable as assignee or watcher. Read-only.             |
-| `jira-actions:add-comment`          | Adds a Markdown comment to an issue.                                                             |
-| `jira-actions:get-comments`         | Reads the comments of an issue with page cursors, bodies as Markdown by default. Read-only.      |
-| `jira-actions:update-comment`       | Replaces the body of an existing comment on an issue.                                            |
-| `jira-actions:delete-comment`       | Permanently deletes a comment. Destructive.                                                      |
-| `jira-actions:add-label`            | Adds a single label to an issue without affecting its other labels.                              |
-| `jira-actions:remove-label`         | Removes a single label from an issue without affecting its other labels.                         |
-| `jira-actions:add-remote-link`      | Attaches a titled web link (e.g. a PR or Backstage entity page) to an issue.                     |
-| `jira-actions:get-remote-links`     | Reads the web links attached to an issue. Read-only.                                             |
-| `jira-actions:link-work-items`      | Links two issues with a relation such as "blocks" or "duplicates".                               |
-| `jira-actions:list-link-types`      | Lists the available issue link types with their relation descriptions. Read-only.                |
-| `jira-actions:list-transitions`     | Lists the statuses an issue can currently move to. Read-only.                                    |
-| `jira-actions:transition-work-item` | Moves an issue to a target status by name via the matching workflow transition.                  |
-| `jira-actions:list-projects`        | Lists the visible Jira projects with URLs and descriptions, optionally name-filtered. Read-only. |
-| `jira-actions:list-issue-types`     | Lists the issue types available in a project. Read-only.                                         |
-| `jira-actions:list-fields`          | Lists the instance's fields, including custom fields with their IDs. Read-only.                  |
-| `jira-actions:list-versions`        | Lists the versions of a project, e.g. valid fixVersions names. Read-only.                        |
-| `jira-actions:list-components`      | Lists the components of a project. Read-only.                                                    |
-| `jira-actions:create-version`       | Creates a version in a project, e.g. for an upcoming release.                                    |
-| `jira-actions:get-worklogs`         | Reads the work log entries of an issue. Read-only.                                               |
-| `jira-actions:add-worklog`          | Logs work on an issue with a Jira duration such as "2h 30m".                                     |
-| `jira-actions:add-watcher`          | Adds a user as a watcher of an issue.                                                            |
-| `jira-actions:remove-watcher`       | Removes a user from the watchers of an issue.                                                    |
-| `jira-actions:list-boards`          | Lists the visible agile boards, optionally filtered by name or project. Read-only.               |
-| `jira-actions:list-sprints`         | Lists the sprints of a board, optionally filtered by state. Read-only.                           |
-| `jira-actions:move-to-sprint`       | Moves up to fifty issues into a sprint.                                                          |
+| Action ID                             | Description                                                                                      |
+| ------------------------------------- | ------------------------------------------------------------------------------------------------ |
+| `jira-actions:create-work-item`       | Creates a work item (issue) such as a Story, Bug or Task in a Jira project.                      |
+| `jira-actions:update-work-item`       | Modifies fields (summary, description, labels, assignee, issue type) of an existing Jira issue.  |
+| `jira-actions:rename-work-item`       | Changes only the summary (title) of an issue.                                                    |
+| `jira-actions:set-work-item-parent`   | Changes only the parent of an issue, e.g. to move it under a different epic.                     |
+| `jira-actions:delete-work-item`       | Permanently deletes an issue. The only action marked destructive.                                |
+| `jira-actions:get-work-item`          | Reads a single issue by key, including its links and selected custom fields. Read-only.          |
+| `jira-actions:search-work-items`      | Searches issues by raw JQL or simplified filters, with page cursors. Read-only.                  |
+| `jira-actions:search-users`           | Finds users and returns the identity value usable as assignee or watcher. Read-only.             |
+| `jira-actions:add-comment`            | Adds a Markdown comment to an issue.                                                             |
+| `jira-actions:get-comments`           | Reads the comments of an issue with page cursors, bodies as Markdown by default. Read-only.      |
+| `jira-actions:update-comment`         | Replaces the body of an existing comment on an issue.                                            |
+| `jira-actions:delete-comment`         | Permanently deletes a comment. Destructive.                                                      |
+| `jira-actions:add-label`              | Adds a single label to an issue without affecting its other labels.                              |
+| `jira-actions:remove-label`           | Removes a single label from an issue without affecting its other labels.                         |
+| `jira-actions:add-remote-link`        | Attaches a titled web link (e.g. a PR or Backstage entity page) to an issue.                     |
+| `jira-actions:get-remote-links`       | Reads the web links attached to an issue. Read-only.                                             |
+| `jira-actions:link-work-items`        | Links two issues with a relation such as "blocks" or "duplicates".                               |
+| `jira-actions:list-link-types`        | Lists the available issue link types with their relation descriptions. Read-only.                |
+| `jira-actions:list-transitions`       | Lists the statuses an issue can currently move to. Read-only.                                    |
+| `jira-actions:transition-work-item`   | Moves an issue to a target status by name via the matching workflow transition.                  |
+| `jira-actions:list-projects`          | Lists the visible Jira projects with URLs and descriptions, optionally name-filtered. Read-only. |
+| `jira-actions:list-issue-types`       | Lists the issue types available in a project. Read-only.                                         |
+| `jira-actions:list-fields`            | Lists the instance's fields, including custom fields with their IDs. Read-only.                  |
+| `jira-actions:list-versions`          | Lists the versions of a project, e.g. valid fixVersions names. Read-only.                        |
+| `jira-actions:list-components`        | Lists the components of a project. Read-only.                                                    |
+| `jira-actions:create-version`         | Creates a version in a project, e.g. for an upcoming release.                                    |
+| `jira-actions:get-worklogs`           | Reads the work log entries of an issue. Read-only.                                               |
+| `jira-actions:add-worklog`            | Logs work on an issue with a Jira duration such as "2h 30m".                                     |
+| `jira-actions:add-watcher`            | Adds a user as a watcher of an issue.                                                            |
+| `jira-actions:remove-watcher`         | Removes a user from the watchers of an issue.                                                    |
+| `jira-actions:list-boards`            | Lists the visible agile boards, optionally filtered by name or project. Read-only.               |
+| `jira-actions:list-sprints`           | Lists the sprints of a board, optionally filtered by state. Read-only.                           |
+| `jira-actions:list-sprint-work-items` | Lists the work items of a sprint, with page cursors. Read-only.                                  |
+| `jira-actions:get-sprint-insights`    | Summarizes a sprint: totals, completion, and status/type/assignee breakdowns. Read-only.         |
+| `jira-actions:move-to-sprint`         | Moves up to fifty issues into a sprint.                                                          |
+| `jira-actions:move-to-backlog`        | Moves up to fifty issues out of their sprints into the backlog.                                  |
 
 All actions accept an optional `host` input to select a specific Jira
 connection when more than one is configured; without it, the first configured
@@ -52,7 +55,8 @@ Usage notes:
 - `search-work-items` takes either a raw `jql` input or simplified filters
   (`projectKey`, `text`, `status`, `issueType`, `assignee`, `labels`) — not
   both. Filters are compiled to JQL ordered by most recently updated.
-- `search-work-items` and `get-comments` page with an opaque cursor: pass a
+- `search-work-items`, `get-comments`, and `list-sprint-work-items` page
+  with an opaque cursor: pass a
   previous run's `nextPageToken` output as the `pageToken` input to fetch
   the next page; the token is absent once no further results remain.
 - `fixVersions`, `affectsVersions`, and `components` on create/update take

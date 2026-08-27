@@ -37,4 +37,7 @@ spec:
     - ./remove-watcher.yaml
     - ./list-boards.yaml
     - ./list-sprints.yaml
+    - ./list-sprint-work-items.yaml
+    - ./get-sprint-insights.yaml
     - ./move-to-sprint.yaml
+    - ./move-to-backlog.yaml

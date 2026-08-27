@@ -1,0 +1,41 @@
+apiVersion: scaffolder.backstage.io/v1beta3
+kind: Template
+metadata:
+  name: 'jira-test-move-to-backlog'
+  title: 'Jira Test: Move to Backlog'
+  description: 'Moves Jira work items out of their sprints into the backlog via the jira-actions:move-to-backlog action.'
+  tags:
+    - jira
+    - test
+spec:
+  owner: user:guest
+  type: jira-test
+  parameters:
+    - title: Move to backlog
+      required:
+        - issueKeys
+      properties:
+        issueKeys:
+          title: 'Issue keys'
+          type: array
+          description: 'The keys of the issues to move, at most fifty'
+          items:
+            type: string
+        host:
+          title: 'Jira host'
+          type: string
+          description: 'Only needed when multiple Jira connections are configured'
+  steps:
+    - id: invoke
+      name: 'Move to backlog'
+      action: jira-actions:move-to-backlog
+      input:
+        issueKeys: ${{ parameters.issueKeys }}
+        host: ${{ parameters.host }}
+  output:
+    text:
+      - title: Result
+        content: |
+          ```json
+          ${{ steps.invoke.output | dump(2) }}
+          ```
