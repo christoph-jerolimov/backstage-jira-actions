@@ -8,12 +8,12 @@ Provides Backstage Actions Registry actions to create and modify Jira work items
 
 ### Requirement: Jira actions are registered in the Actions Registry
 
-The system SHALL register the Jira work item actions in the Backstage Actions Registry under the `jira-actions` plugin, so that they are discoverable and invokable through the actions service, and exposed via the MCP actions backend when the `jira-actions` plugin is listed in `backend.actions.pluginSources`. The registered actions SHALL be `create-work-item`, `update-work-item`, `rename-work-item`, `set-work-item-parent`, `delete-work-item`, `get-work-item`, `search-work-items`, `search-users`, `add-comment`, `get-comments`, `update-comment`, `delete-comment`, `add-label`, `remove-label`, `add-remote-link`, `get-remote-links`, `link-work-items`, `list-link-types`, `list-transitions`, `transition-work-item`, `list-projects`, `list-issue-types`, `list-fields`, `list-versions`, `list-components`, `create-version`, `get-worklogs`, `add-worklog`, `add-watcher`, `remove-watcher`, `list-boards`, `list-sprints`, `list-sprint-work-items`, `get-sprint-insights`, `create-sprint`, `update-sprint`, `start-sprint`, `complete-sprint`, `move-to-sprint`, and `move-to-backlog`. Each action SHALL declare a title, a description, and typed input and output schemas so that callers (including AI agents) can discover how to use it without external documentation. The purely reading actions (`get-work-item`, `search-work-items`, `search-users`, `get-comments`, `get-remote-links`, `list-link-types`, `list-transitions`, `list-projects`, `list-issue-types`, `list-fields`, `list-versions`, `list-components`, `get-worklogs`, `list-boards`, `list-sprints`, `list-sprint-work-items`, `get-sprint-insights`) SHALL be marked read-only in their registry attributes. `delete-work-item` and `delete-comment` SHALL be the only actions marked destructive.
+The system SHALL register the Jira work item actions in the Backstage Actions Registry under the `jira-actions` plugin, so that they are discoverable and invokable through the actions service, and exposed via the MCP actions backend when the `jira-actions` plugin is listed in `backend.actions.pluginSources`. The registered actions SHALL be `create-work-item`, `create-work-items`, `update-work-item`, `rename-work-item`, `set-work-item-parent`, `delete-work-item`, `get-work-item`, `search-work-items`, `search-users`, `add-comment`, `get-comments`, `update-comment`, `delete-comment`, `add-label`, `remove-label`, `add-remote-link`, `get-remote-links`, `link-work-items`, `list-link-types`, `list-transitions`, `transition-work-item`, `list-projects`, `list-issue-types`, `list-fields`, `list-versions`, `list-components`, `create-version`, `get-worklogs`, `add-worklog`, `add-watcher`, `remove-watcher`, `list-boards`, `list-sprints`, `list-sprint-work-items`, `get-sprint-insights`, `create-sprint`, `update-sprint`, `start-sprint`, `complete-sprint`, `move-to-sprint`, and `move-to-backlog`. Each action SHALL declare a title, a description, and typed input and output schemas so that callers (including AI agents) can discover how to use it without external documentation. The purely reading actions (`get-work-item`, `search-work-items`, `search-users`, `get-comments`, `get-remote-links`, `list-link-types`, `list-transitions`, `list-projects`, `list-issue-types`, `list-fields`, `list-versions`, `list-components`, `get-worklogs`, `list-boards`, `list-sprints`, `list-sprint-work-items`, `get-sprint-insights`) SHALL be marked read-only in their registry attributes. `delete-work-item` and `delete-comment` SHALL be the only actions marked destructive.
 
 #### Scenario: Actions are discoverable
 
 - **WHEN** the backend starts with the Jira actions plugin installed and `jira-actions` listed in `backend.actions.pluginSources`
-- **THEN** all forty actions are listed by the actions service with their input and output schemas
+- **THEN** all forty-one actions are listed by the actions service with their input and output schemas
 
 #### Scenario: Read actions are marked read-only
 
@@ -318,7 +318,7 @@ The system SHALL provide a `list-issue-types` action that lists the issue types 
 
 ### Requirement: Actions resolve Jira projects from catalog entities
 
-The project-scoped actions (`create-work-item`, `search-work-items`, `list-issue-types`, `list-versions`, `list-components`, `create-version`) SHALL accept an `entityRef` input (e.g. `component:default/my-service`) as an alternative to `projectKey`. When `entityRef` is given, the action SHALL look up the entity in the software catalog using the invoking caller's credentials and use the entity's `jira/project-key` annotation as the project key. When the entity also carries a `jira/host` annotation and the action's `host` input is not given, that annotation SHALL select the Jira connection.
+The project-scoped actions (`create-work-item`, `create-work-items`, `search-work-items`, `list-issue-types`, `list-versions`, `list-components`, `create-version`) SHALL accept an `entityRef` input (e.g. `component:default/my-service`) as an alternative to `projectKey`. When `entityRef` is given, the action SHALL look up the entity in the software catalog using the invoking caller's credentials and use the entity's `jira/project-key` annotation as the project key. When the entity also carries a `jira/host` annotation and the action's `host` input is not given, that annotation SHALL select the Jira connection.
 
 Error behavior:
 
@@ -975,3 +975,35 @@ The system SHALL provide a `complete-sprint` action that closes an active sprint
 
 - **WHEN** the action is invoked with an unknown sprint id
 - **THEN** the action fails with a NotFound-style error naming the sprint id
+
+### Requirement: Create work items action
+
+The system SHALL provide a `create-work-items` action that creates multiple Jira issues in one invocation via Jira's bulk-create endpoint. The input SHALL accept:
+
+- `projectKey` or `entityRef` (exactly one, per the catalog-entity-resolution requirement).
+- `epic` (optional): a work item to create first and use as the parent of every item — with `summary` (required), `issueType` (optional, default `Epic`), and the same optional `description`, `descriptionFormat`, `labels`, `assignee`, and `customFields` fields as `create-work-item`.
+- `parentKey` (optional): an existing parent for every item; MUST NOT be combined with `epic`.
+- `items` (required): one to fifty entries, each with `issueType` and `summary` (required) and the same optional fields as the epic.
+- `host` (optional).
+
+Rich text and `me` assignee resolution SHALL behave as on `create-work-item`. On success, the output SHALL include `items` — the created issues' `key`, `id`, and `url` in input order — and `parent` (`key`, `url`) when an epic was created. If Jira reports errors for some entries of the bulk call, the action SHALL fail with an error naming the failed entries and Jira's details, and listing any issues that were created before the failure.
+
+#### Scenario: Create an epic with children
+
+- **WHEN** the action is invoked with an `epic` and three `items`
+- **THEN** the epic is created first, the three items are bulk-created with the epic as their parent, and the output lists the epic and the three created issues
+
+#### Scenario: Create siblings under an existing parent
+
+- **WHEN** the action is invoked with `parentKey: PROJ-1` and two `items`
+- **THEN** both items are bulk-created with PROJ-1 as their parent and no epic is created
+
+#### Scenario: Epic conflicts with parentKey
+
+- **WHEN** the action is invoked with both `epic` and `parentKey`
+- **THEN** the action fails with an input validation error before any Jira call
+
+#### Scenario: Partial bulk failure
+
+- **WHEN** Jira rejects some entries of the bulk call
+- **THEN** the action fails with an error that names the failed entries with Jira's details and lists any issues that were created
