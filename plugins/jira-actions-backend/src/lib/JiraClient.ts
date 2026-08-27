@@ -1,6 +1,7 @@
 import { InputError, NotAllowedError, NotFoundError } from '@backstage/errors';
 import { JsonObject } from '@backstage/types';
 import { adfToMarkdown, adfToText, RichTextFormat, toWriteValue } from './adf';
+import { TtlCache } from './cache';
 import { JiraConnection } from './connections';
 
 /**
@@ -210,13 +211,26 @@ const MAX_RETRY_DELAY_MS = 10_000;
 
 export class JiraClient {
   private readonly sleep: (ms: number) => Promise<void>;
+  private readonly cache?: TtlCache;
 
   constructor(
     private readonly connection: JiraConnection,
-    options?: { sleep?: (ms: number) => Promise<void> },
+    options?: { sleep?: (ms: number) => Promise<void>; cache?: TtlCache },
   ) {
     this.sleep =
       options?.sleep ?? (ms => new Promise(resolve => setTimeout(resolve, ms)));
+    this.cache = options?.cache;
+  }
+
+  private async cached<T>(key: string, fetcher: () => Promise<T>): Promise<T> {
+    const cacheKey = `${key}:${this.connection.host}`;
+    const hit = this.cache?.get<T>(cacheKey);
+    if (hit !== undefined) {
+      return hit;
+    }
+    const value = await fetcher();
+    this.cache?.set(cacheKey, value);
+    return value;
   }
 
   private get isCloud(): boolean {
@@ -913,6 +927,10 @@ export class JiraClient {
   }
 
   async listLinkTypes(): Promise<JiraLinkType[]> {
+    return this.cached('linkTypes', () => this.fetchLinkTypes());
+  }
+
+  private async fetchLinkTypes(): Promise<JiraLinkType[]> {
     const response = await this.request('GET', '/issueLinkType');
     if (!response.ok) {
       await this.throwForResponse(response, 'list Jira issue link types');
@@ -981,6 +999,17 @@ export class JiraClient {
   }
 
   async listFields(options?: { name?: string }): Promise<JiraField[]> {
+    const fields = await this.cached('fields', () => this.fetchFields());
+    const filter = options?.name?.toLocaleLowerCase('en-US');
+    return fields.filter(
+      field =>
+        !filter ||
+        field.id.toLocaleLowerCase('en-US').includes(filter) ||
+        field.name.toLocaleLowerCase('en-US').includes(filter),
+    );
+  }
+
+  private async fetchFields(): Promise<JiraField[]> {
     const response = await this.request('GET', '/field');
     if (!response.ok) {
       await this.throwForResponse(response, 'list Jira fields');
@@ -991,20 +1020,12 @@ export class JiraClient {
       custom?: boolean;
       schema?: { type?: string };
     }>;
-    const filter = options?.name?.toLocaleLowerCase('en-US');
-    return body
-      .filter(
-        field =>
-          !filter ||
-          field.id.toLocaleLowerCase('en-US').includes(filter) ||
-          (field.name ?? '').toLocaleLowerCase('en-US').includes(filter),
-      )
-      .map(field => ({
-        id: field.id,
-        name: field.name ?? '',
-        custom: field.custom ?? false,
-        type: field.schema?.type,
-      }));
+    return body.map(field => ({
+      id: field.id,
+      name: field.name ?? '',
+      custom: field.custom ?? false,
+      type: field.schema?.type,
+    }));
   }
 
   async getWorklogs(

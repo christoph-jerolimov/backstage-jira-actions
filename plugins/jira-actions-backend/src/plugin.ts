@@ -61,6 +61,7 @@ import {
   registerAddWorklogAction,
   registerGetWorklogsAction,
 } from './actions/worklogs';
+import { TtlCache } from './lib/cache';
 import { JiraConnectionsReader } from './lib/connections';
 import { jiraActionsPermissions } from './permissions';
 
@@ -90,6 +91,9 @@ export const jiraActionsPlugin = createBackendPlugin({
       }) {
         permissionsRegistry.addPermissions(jiraActionsPermissions);
         const connections = JiraConnectionsReader.fromConfig(config);
+        // Instance-level discovery data (link types, fields) changes rarely;
+        // one backend-lifetime cache serves it for a short TTL.
+        const discoveryCache = new TtlCache(60_000);
         const common = { actionsRegistry, connections, permissions };
         registerCreateWorkItemAction({ ...common, catalog });
         registerCreateWorkItemsAction({ ...common, catalog });
@@ -108,13 +112,13 @@ export const jiraActionsPlugin = createBackendPlugin({
         registerDeleteCommentAction(common);
         registerAddRemoteLinkAction(common);
         registerGetRemoteLinksAction(common);
-        registerLinkWorkItemsAction(common);
-        registerListLinkTypesAction(common);
+        registerLinkWorkItemsAction({ ...common, cache: discoveryCache });
+        registerListLinkTypesAction({ ...common, cache: discoveryCache });
         registerListTransitionsAction(common);
         registerTransitionWorkItemAction(common);
         registerListProjectsAction(common);
         registerListIssueTypesAction({ ...common, catalog });
-        registerListFieldsAction(common);
+        registerListFieldsAction({ ...common, cache: discoveryCache });
         registerListVersionsAction({ ...common, catalog });
         registerListComponentsAction({ ...common, catalog });
         registerCreateVersionAction({ ...common, catalog });

@@ -1,6 +1,7 @@
 import { PermissionsService } from '@backstage/backend-plugin-api';
 import { ActionsRegistryService } from '@backstage/backend-plugin-api/alpha';
 import { JiraClient } from '../lib/JiraClient';
+import { TtlCache } from '../lib/cache';
 import { JiraConnectionsReader } from '../lib/connections';
 import {
   assertPermission,
@@ -12,8 +13,9 @@ export function registerListLinkTypesAction(options: {
   actionsRegistry: ActionsRegistryService;
   connections: JiraConnectionsReader;
   permissions: PermissionsService;
+  cache?: TtlCache;
 }) {
-  const { actionsRegistry, connections, permissions } = options;
+  const { actionsRegistry, connections, permissions, cache } = options;
 
   actionsRegistry.register({
     name: 'list-link-types',
@@ -66,7 +68,7 @@ export function registerListLinkTypesAction(options: {
         credentials,
       );
       const connection = connections.find({ host: input.host });
-      const client = new JiraClient(connection);
+      const client = new JiraClient(connection, { cache });
       const linkTypes = await client.listLinkTypes();
       return { output: { linkTypes } };
     },
@@ -77,8 +79,9 @@ export function registerLinkWorkItemsAction(options: {
   actionsRegistry: ActionsRegistryService;
   connections: JiraConnectionsReader;
   permissions: PermissionsService;
+  cache?: TtlCache;
 }) {
-  const { actionsRegistry, connections, permissions } = options;
+  const { actionsRegistry, connections, permissions, cache } = options;
 
   actionsRegistry.register({
     name: 'link-work-items',
@@ -134,7 +137,7 @@ export function registerLinkWorkItemsAction(options: {
         credentials,
       );
       const connection = connections.find({ host: input.host });
-      const client = new JiraClient(connection);
+      const client = new JiraClient(connection, { cache });
       const { linkType } = await client.linkIssues(
         input.issueKey,
         input.targetKey,

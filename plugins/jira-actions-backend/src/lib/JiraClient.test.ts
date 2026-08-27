@@ -2,6 +2,7 @@ import { registerMswTestHooks } from '@backstage/backend-test-utils';
 import { http, HttpResponse } from 'msw';
 import { setupServer } from 'msw/node';
 import { JiraClient } from './JiraClient';
+import { TtlCache } from './cache';
 import { JiraConnection } from './connections';
 
 const cloudConnection: JiraConnection = {
@@ -1890,5 +1891,101 @@ describe('JiraClient rate limit retries', () => {
     await expect(client.listLinkTypes()).rejects.toThrow(/status 500/);
     expect(calls).toBe(1);
     expect(waits).toEqual([]);
+  });
+});
+
+describe('JiraClient discovery caching', () => {
+  const server = setupServer();
+  registerMswTestHooks(server);
+
+  const linkTypesHandler = (counter: { calls: number }) =>
+    http.get('https://example.atlassian.net/rest/api/3/issueLinkType', () => {
+      counter.calls += 1;
+      return HttpResponse.json({
+        issueLinkTypes: [
+          {
+            id: '1',
+            name: 'Blocks',
+            inward: 'is blocked by',
+            outward: 'blocks',
+          },
+        ],
+      });
+    });
+
+  it('serves repeated discovery reads from the cache within the TTL', async () => {
+    const counter = { calls: 0 };
+    server.use(linkTypesHandler(counter));
+
+    const cache = new TtlCache(60_000);
+    const client = new JiraClient(cloudConnection, { cache });
+
+    await client.listLinkTypes();
+    const second = await client.listLinkTypes();
+    expect(counter.calls).toBe(1);
+    expect(second[0].name).toBe('Blocks');
+  });
+
+  it('reuses the cache for link resolution', async () => {
+    const counter = { calls: 0 };
+    let linked = false;
+    server.use(
+      linkTypesHandler(counter),
+      http.post('https://example.atlassian.net/rest/api/3/issueLink', () => {
+        linked = true;
+        return new HttpResponse(null, { status: 201 });
+      }),
+    );
+
+    const cache = new TtlCache(60_000);
+    const client = new JiraClient(cloudConnection, { cache });
+
+    await client.listLinkTypes();
+    await client.linkIssues('PROJ-1', 'PROJ-2', 'blocks');
+    expect(counter.calls).toBe(1);
+    expect(linked).toBe(true);
+  });
+
+  it('expires entries after the TTL', async () => {
+    const counter = { calls: 0 };
+    server.use(
+      http.get('https://example.atlassian.net/rest/api/3/field', () => {
+        counter.calls += 1;
+        return HttpResponse.json([
+          { id: 'summary', name: 'Summary', custom: false },
+        ]);
+      }),
+    );
+
+    let nowMs = 1_000_000;
+    const cache = new TtlCache(60_000, () => nowMs);
+    const client = new JiraClient(cloudConnection, { cache });
+
+    await client.listFields();
+    nowMs += 30_000;
+    await client.listFields({ name: 'summary' });
+    expect(counter.calls).toBe(1);
+
+    nowMs += 60_000;
+    await client.listFields();
+    expect(counter.calls).toBe(2);
+  });
+
+  it('caches per host', async () => {
+    const cloudCounter = { calls: 0 };
+    const dcCounter = { calls: 0 };
+    server.use(
+      linkTypesHandler(cloudCounter),
+      http.get('https://jira.example.com/rest/api/2/issueLinkType', () => {
+        dcCounter.calls += 1;
+        return HttpResponse.json({ issueLinkTypes: [] });
+      }),
+    );
+
+    const cache = new TtlCache(60_000);
+    await new JiraClient(cloudConnection, { cache }).listLinkTypes();
+    await new JiraClient(datacenterConnection, { cache }).listLinkTypes();
+    expect(cloudCounter.calls).toBe(1);
+    expect(dcCounter.calls).toBe(1);
   });
 });
