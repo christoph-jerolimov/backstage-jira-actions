@@ -11,6 +11,7 @@ const TEMPLATES_DIR = resolve(
 // must ask for as required parameters.
 const REQUIRED_INPUTS: Record<string, string[]> = {
   'create-work-item': ['issueType', 'summary'],
+  'create-work-items': ['items'],
   'update-work-item': ['issueKey'],
   'rename-work-item': ['issueKey', 'summary'],
   'set-work-item-parent': ['issueKey', 'parentKey'],
@@ -56,6 +57,7 @@ const REQUIRED_INPUTS: Record<string, string[]> = {
 // key; their templates must offer an entity picker for it.
 const ENTITY_REF_ACTIONS = [
   'create-work-item',
+  'create-work-items',
   'search-work-items',
   'list-issue-types',
   'list-versions',
@@ -94,6 +96,11 @@ const TABLE_OUTPUTS: Record<
   'search-work-items': {
     collection: 'items',
     header: '| Key | Summary | Status | Type | Assignee |',
+    linkedKey: true,
+  },
+  'create-work-items': {
+    collection: 'items',
+    header: '| Key |',
     linkedKey: true,
   },
   'list-sprint-work-items': {

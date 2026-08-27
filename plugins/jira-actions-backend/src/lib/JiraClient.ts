@@ -235,9 +235,7 @@ export class JiraClient {
     return `https://${this.connection.host}/browse/${issueKey}`;
   }
 
-  async createIssue(
-    request: JiraCreateWorkItemRequest,
-  ): Promise<{ id: string; key: string; url: string }> {
+  private toCreateFields(request: JiraCreateWorkItemRequest): JsonObject {
     const fields: JsonObject = {
       project: { key: request.projectKey },
       issuetype: { name: request.issueType },
@@ -247,6 +245,13 @@ export class JiraClient {
     if (request.parentKey !== undefined) {
       fields.parent = { key: request.parentKey };
     }
+    return fields;
+  }
+
+  async createIssue(
+    request: JiraCreateWorkItemRequest,
+  ): Promise<{ id: string; key: string; url: string }> {
+    const fields = this.toCreateFields(request);
 
     const response = await this.request('POST', '/issue', { body: { fields } });
     if (!response.ok) {
@@ -254,6 +259,64 @@ export class JiraClient {
     }
     const body = (await response.json()) as { id: string; key: string };
     return { id: body.id, key: body.key, url: this.browseUrl(body.key) };
+  }
+
+  /**
+   * Creates up to fifty issues in one bulk call. Jira's bulk endpoint is
+   * not transactional: on partial failure the thrown error names the failed
+   * entries and any issues that were created.
+   */
+  async createIssuesBulk(
+    requests: JiraCreateWorkItemRequest[],
+  ): Promise<Array<{ id: string; key: string; url: string }>> {
+    const response = await this.request('POST', '/issue/bulk', {
+      body: {
+        issueUpdates: requests.map(request => ({
+          fields: this.toCreateFields(request),
+        })),
+      },
+    });
+    if (!response.ok) {
+      await this.throwForResponse(response, 'bulk-create Jira issues');
+    }
+    const body = (await response.json()) as {
+      issues?: Array<{ id: string | number; key: string }>;
+      errors?: Array<{
+        failedElementNumber?: number;
+        elementErrors?: {
+          errorMessages?: string[];
+          errors?: Record<string, string>;
+        };
+      }>;
+    };
+    const created = (body.issues ?? []).map(issue => ({
+      id: String(issue.id),
+      key: issue.key,
+      url: this.browseUrl(issue.key),
+    }));
+    if (body.errors && body.errors.length > 0) {
+      const details = body.errors
+        .map(error => {
+          const messages = [
+            ...(error.elementErrors?.errorMessages ?? []),
+            ...Object.entries(error.elementErrors?.errors ?? {}).map(
+              ([field, message]) => `${field}: ${message}`,
+            ),
+          ].join('; ');
+          return `entry ${error.failedElementNumber ?? '?'}: ${messages}`;
+        })
+        .join(' | ');
+      const createdNote =
+        created.length > 0
+          ? `; created before the failure: ${created
+              .map(issue => issue.key)
+              .join(', ')}`
+          : '';
+      throw new InputError(
+        `Failed to bulk-create Jira issues (${details})${createdNote}`,
+      );
+    }
+    return created;
   }
 
   async updateIssue(

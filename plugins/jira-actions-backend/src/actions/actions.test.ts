@@ -26,6 +26,7 @@ import {
   registerUpdateCommentAction,
 } from './commentEditing';
 import { registerCreateWorkItemAction } from './createWorkItem';
+import { registerCreateWorkItemsAction } from './createWorkItems';
 import { registerDeleteWorkItemAction } from './deleteWorkItem';
 import { registerGetCommentsAction } from './getComments';
 import { registerGetWorkItemAction } from './getWorkItem';
@@ -140,6 +141,7 @@ function makeRegistry(
     permissions,
   });
   const common = { actionsRegistry, connections: reader, permissions };
+  registerCreateWorkItemsAction({ ...common, catalog });
   registerUpdateCommentAction(common);
   registerDeleteCommentAction(common);
   registerAddRemoteLinkAction(common);
@@ -3124,6 +3126,156 @@ describe('jira work item actions', () => {
     });
   });
 
+  describe('create-work-items (bulk)', () => {
+    it('creates an epic with children', async () => {
+      let bulkBody: any;
+      server.use(
+        http.post('https://example.atlassian.net/rest/api/3/issue', async () =>
+          HttpResponse.json({ id: '100', key: 'PROJ-100' }, { status: 201 }),
+        ),
+        http.post(
+          'https://example.atlassian.net/rest/api/3/issue/bulk',
+          async ({ request }) => {
+            bulkBody = await request.json();
+            return HttpResponse.json(
+              {
+                issues: [
+                  { id: '101', key: 'PROJ-101' },
+                  { id: '102', key: 'PROJ-102' },
+                ],
+                errors: [],
+              },
+              { status: 201 },
+            );
+          },
+        ),
+      );
+
+      const result = await makeRegistry([cloudConnection]).invoke({
+        id: 'test:create-work-items',
+        input: {
+          projectKey: 'PROJ',
+          epic: { summary: 'Big feature' },
+          items: [
+            { issueType: 'Story', summary: 'Part one' },
+            { issueType: 'Story', summary: 'Part two' },
+          ],
+        },
+      });
+
+      expect(bulkBody.issueUpdates).toHaveLength(2);
+      expect(bulkBody.issueUpdates[0].fields.parent).toEqual({
+        key: 'PROJ-100',
+      });
+      expect(bulkBody.issueUpdates[0].fields.summary).toBe('Part one');
+      expect(result).toEqual({
+        output: {
+          parent: {
+            key: 'PROJ-100',
+            url: 'https://example.atlassian.net/browse/PROJ-100',
+          },
+          items: [
+            {
+              id: '101',
+              key: 'PROJ-101',
+              url: 'https://example.atlassian.net/browse/PROJ-101',
+            },
+            {
+              id: '102',
+              key: 'PROJ-102',
+              url: 'https://example.atlassian.net/browse/PROJ-102',
+            },
+          ],
+        },
+      });
+    });
+
+    it('creates siblings under an existing parent without an epic', async () => {
+      let bulkBody: any;
+      let singleCreates = 0;
+      server.use(
+        http.post('https://example.atlassian.net/rest/api/3/issue', () => {
+          singleCreates += 1;
+          return HttpResponse.json({ id: '1', key: 'PROJ-1' }, { status: 201 });
+        }),
+        http.post(
+          'https://example.atlassian.net/rest/api/3/issue/bulk',
+          async ({ request }) => {
+            bulkBody = await request.json();
+            return HttpResponse.json(
+              { issues: [{ id: '103', key: 'PROJ-103' }], errors: [] },
+              { status: 201 },
+            );
+          },
+        ),
+      );
+
+      const result: any = await makeRegistry([cloudConnection]).invoke({
+        id: 'test:create-work-items',
+        input: {
+          projectKey: 'PROJ',
+          parentKey: 'PROJ-1',
+          items: [{ issueType: 'Sub-task', summary: 'Child' }],
+        },
+      });
+
+      expect(singleCreates).toBe(0);
+      expect(bulkBody.issueUpdates[0].fields.parent).toEqual({ key: 'PROJ-1' });
+      expect(result.output.parent).toBeUndefined();
+      expect(result.output.items).toHaveLength(1);
+    });
+
+    it('rejects epic combined with parentKey', async () => {
+      await expect(
+        makeRegistry([cloudConnection]).invoke({
+          id: 'test:create-work-items',
+          input: {
+            projectKey: 'PROJ',
+            epic: { summary: 'x' },
+            parentKey: 'PROJ-1',
+            items: [{ issueType: 'Story', summary: 'y' }],
+          },
+        }),
+      ).rejects.toThrow(/either "epic" or "parentKey"/);
+    });
+
+    it('reports partial bulk failures with created keys', async () => {
+      server.use(
+        http.post('https://example.atlassian.net/rest/api/3/issue/bulk', () =>
+          HttpResponse.json(
+            {
+              issues: [{ id: '101', key: 'PROJ-101' }],
+              errors: [
+                {
+                  failedElementNumber: 1,
+                  elementErrors: {
+                    errors: { issuetype: 'The issue type is invalid' },
+                  },
+                },
+              ],
+            },
+            { status: 201 },
+          ),
+        ),
+      );
+
+      await expect(
+        makeRegistry([cloudConnection]).invoke({
+          id: 'test:create-work-items',
+          input: {
+            projectKey: 'PROJ',
+            items: [
+              { issueType: 'Story', summary: 'ok' },
+              { issueType: 'Nope', summary: 'bad' },
+            ],
+          },
+        }),
+      ).rejects.toThrow(
+        /entry 1: issuetype: The issue type is invalid.*created before the failure: PROJ-101/,
+      );
+    });
+  });
+
   describe('permission gating', () => {
     it('rejects a denied caller before any Jira call', async () => {
       let called = false;
@@ -3168,7 +3320,7 @@ describe('jira work item actions', () => {
     });
   });
 
-  it('lists all forty actions with schemas and attributes', async () => {
+  it('lists all forty-one actions with schemas and attributes', async () => {
     const { actions } = await makeRegistry([cloudConnection]).list();
     const ids = actions.map(a => a.id).sort();
     expect(ids).toEqual([
@@ -3181,6 +3333,7 @@ describe('jira work item actions', () => {
       'test:create-sprint',
       'test:create-version',
       'test:create-work-item',
+      'test:create-work-items',
       'test:delete-comment',
       'test:delete-work-item',
       'test:get-comments',

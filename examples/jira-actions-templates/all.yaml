@@ -6,6 +6,7 @@ metadata:
 spec:
   targets:
     - ./create-work-item.yaml
+    - ./create-work-items.yaml
     - ./update-work-item.yaml
     - ./rename-work-item.yaml
     - ./set-work-item-parent.yaml

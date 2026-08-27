@@ -21,6 +21,7 @@ import {
   registerUpdateCommentAction,
 } from './actions/commentEditing';
 import { registerCreateWorkItemAction } from './actions/createWorkItem';
+import { registerCreateWorkItemsAction } from './actions/createWorkItems';
 import { registerDeleteWorkItemAction } from './actions/deleteWorkItem';
 import { registerGetCommentsAction } from './actions/getComments';
 import { registerGetWorkItemAction } from './actions/getWorkItem';
@@ -91,6 +92,7 @@ export const jiraActionsPlugin = createBackendPlugin({
         const connections = JiraConnectionsReader.fromConfig(config);
         const common = { actionsRegistry, connections, permissions };
         registerCreateWorkItemAction({ ...common, catalog });
+        registerCreateWorkItemsAction({ ...common, catalog });
         registerUpdateWorkItemAction({ ...common, catalog });
         registerRenameWorkItemAction(common);
         registerSetWorkItemParentAction(common);
