@@ -19,6 +19,8 @@ so that they can be invoked through the actions service and — via
 | `jira-actions:search-users`         | Finds users and returns the identity value usable as assignee or watcher. Read-only.             |
 | `jira-actions:add-comment`          | Adds a Markdown comment to an issue.                                                             |
 | `jira-actions:get-comments`         | Reads the comments of an issue with page cursors, bodies as Markdown by default. Read-only.      |
+| `jira-actions:update-comment`       | Replaces the body of an existing comment on an issue.                                            |
+| `jira-actions:delete-comment`       | Permanently deletes a comment. Destructive.                                                      |
 | `jira-actions:add-label`            | Adds a single label to an issue without affecting its other labels.                              |
 | `jira-actions:remove-label`         | Removes a single label from an issue without affecting its other labels.                         |
 | `jira-actions:add-remote-link`      | Attaches a titled web link (e.g. a PR or Backstage entity page) to an issue.                     |
@@ -86,7 +88,7 @@ Usage notes:
   unreachable, the error lists the statuses that are reachable.
 - Descriptions and comment bodies carry a format selector
   (`descriptionFormat` on create/update, `bodyFormat` on
-  add-comment/get-comments):
+  add-comment/get-comments/update-comment):
   `markdown` (default), `adf`, or `text`. With `markdown`, a supported
   subset — headings, bullet/ordered lists, fenced code blocks (with
   language), blockquotes, and inline bold/italic/code/links — is converted

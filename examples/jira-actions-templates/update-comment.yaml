@@ -1,0 +1,63 @@
+apiVersion: scaffolder.backstage.io/v1beta3
+kind: Template
+metadata:
+  name: 'jira-test-update-comment'
+  title: 'Jira Test: Update Comment'
+  description: 'Replaces the body of a comment on a Jira work item via the jira-actions:update-comment action.'
+  tags:
+    - jira
+    - test
+spec:
+  owner: user:guest
+  type: jira-test
+  parameters:
+    - title: Update comment
+      required:
+        - issueKey
+        - commentId
+        - body
+      properties:
+        issueKey:
+          title: 'Issue key'
+          type: string
+          description: 'The key of the issue, e.g. PROJ-123'
+        commentId:
+          title: 'Comment ID'
+          type: string
+          description: 'The ID of the comment, as returned by get-comments'
+        body:
+          title: 'New comment'
+          type: string
+          description: 'The new Markdown comment body (or ADF as JSON, or literal text, per the body format)'
+        bodyFormat:
+          title: 'Body format'
+          type: string
+          description: 'How to interpret the body: markdown (default), adf, or text'
+          enum:
+            - markdown
+            - adf
+            - text
+        host:
+          title: 'Jira host'
+          type: string
+          description: 'Only needed when multiple Jira connections are configured'
+  steps:
+    - id: invoke
+      name: 'Update comment'
+      action: jira-actions:update-comment
+      input:
+        issueKey: ${{ parameters.issueKey }}
+        commentId: ${{ parameters.commentId }}
+        body: '${{ parameters.body }}'
+        bodyFormat: ${{ parameters.bodyFormat }}
+        host: ${{ parameters.host }}
+  output:
+    links:
+      - title: Open issue
+        url: ${{ steps.invoke.output.url }}
+    text:
+      - title: Result
+        content: |
+          ```json
+          ${{ steps.invoke.output | dump(2) }}
+          ```

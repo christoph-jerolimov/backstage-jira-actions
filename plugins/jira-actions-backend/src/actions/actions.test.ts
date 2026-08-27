@@ -15,6 +15,10 @@ import {
   registerListSprintsAction,
   registerMoveToSprintAction,
 } from './agile';
+import {
+  registerDeleteCommentAction,
+  registerUpdateCommentAction,
+} from './commentEditing';
 import { registerCreateWorkItemAction } from './createWorkItem';
 import { registerDeleteWorkItemAction } from './deleteWorkItem';
 import { registerGetCommentsAction } from './getComments';
@@ -129,6 +133,8 @@ function makeRegistry(
     permissions,
   });
   const common = { actionsRegistry, connections: reader, permissions };
+  registerUpdateCommentAction(common);
+  registerDeleteCommentAction(common);
   registerAddRemoteLinkAction(common);
   registerGetRemoteLinksAction(common);
   registerListVersionsAction({ ...common, catalog });
@@ -2676,6 +2682,78 @@ describe('jira work item actions', () => {
     });
   });
 
+  describe('comment editing', () => {
+    it('updates a comment with a markdown body', async () => {
+      let received: any;
+      server.use(
+        http.put(
+          'https://example.atlassian.net/rest/api/3/issue/PROJ-1/comment/10',
+          async ({ request }) => {
+            received = await request.json();
+            return HttpResponse.json({ id: 10 });
+          },
+        ),
+      );
+
+      const result = await makeRegistry([cloudConnection]).invoke({
+        id: 'test:update-comment',
+        input: { issueKey: 'PROJ-1', commentId: '10', body: 'Corrected' },
+      });
+
+      expect(received.body.type).toBe('doc');
+      expect(result).toEqual({
+        output: {
+          key: 'PROJ-1',
+          commentId: '10',
+          url: 'https://example.atlassian.net/browse/PROJ-1',
+        },
+      });
+    });
+
+    it('deletes a comment', async () => {
+      let deleted = false;
+      server.use(
+        http.delete(
+          'https://example.atlassian.net/rest/api/3/issue/PROJ-1/comment/10',
+          () => {
+            deleted = true;
+            return new HttpResponse(null, { status: 204 });
+          },
+        ),
+      );
+
+      const result = await makeRegistry([cloudConnection]).invoke({
+        id: 'test:delete-comment',
+        input: { issueKey: 'PROJ-1', commentId: '10' },
+      });
+
+      expect(deleted).toBe(true);
+      expect(result).toEqual({
+        output: { key: 'PROJ-1', commentId: '10' },
+      });
+    });
+
+    it('fails with NotFound for an unknown comment', async () => {
+      server.use(
+        http.put(
+          'https://example.atlassian.net/rest/api/3/issue/PROJ-1/comment/99',
+          () =>
+            HttpResponse.json(
+              { errorMessages: ['Comment does not exist'] },
+              { status: 404 },
+            ),
+        ),
+      );
+
+      await expect(
+        makeRegistry([cloudConnection]).invoke({
+          id: 'test:update-comment',
+          input: { issueKey: 'PROJ-1', commentId: '99', body: 'x' },
+        }),
+      ).rejects.toThrow(/comment 99.*status 404/);
+    });
+  });
+
   describe('permission gating', () => {
     it('rejects a denied caller before any Jira call', async () => {
       let called = false;
@@ -2720,7 +2798,7 @@ describe('jira work item actions', () => {
     });
   });
 
-  it('lists all thirty-one actions with schemas and attributes', async () => {
+  it('lists all thirty-three actions with schemas and attributes', async () => {
     const { actions } = await makeRegistry([cloudConnection]).list();
     const ids = actions.map(a => a.id).sort();
     expect(ids).toEqual([
@@ -2731,6 +2809,7 @@ describe('jira work item actions', () => {
       'test:add-worklog',
       'test:create-version',
       'test:create-work-item',
+      'test:delete-comment',
       'test:delete-work-item',
       'test:get-comments',
       'test:get-remote-links',
@@ -2754,6 +2833,7 @@ describe('jira work item actions', () => {
       'test:search-work-items',
       'test:set-work-item-parent',
       'test:transition-work-item',
+      'test:update-comment',
       'test:update-work-item',
     ]);
     const readOnlyActions = actions
@@ -2780,7 +2860,10 @@ describe('jira work item actions', () => {
     const destructiveActions = actions
       .filter(a => a.attributes.destructive)
       .map(a => a.id);
-    expect(destructiveActions).toEqual(['test:delete-work-item']);
+    expect(destructiveActions).toEqual([
+      'test:delete-comment',
+      'test:delete-work-item',
+    ]);
     for (const action of actions) {
       expect(action.schema.input).toBeDefined();
       expect(action.schema.output).toBeDefined();

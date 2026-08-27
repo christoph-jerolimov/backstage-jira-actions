@@ -413,6 +413,42 @@ export class JiraClient {
     };
   }
 
+  async updateComment(
+    issueKey: string,
+    commentId: string,
+    commentBody: string | JsonObject,
+    bodyFormat: RichTextFormat = 'markdown',
+  ): Promise<void> {
+    const response = await this.request(
+      'PUT',
+      `/issue/${encodeURIComponent(issueKey)}/comment/${encodeURIComponent(
+        commentId,
+      )}`,
+      { body: { body: toWriteValue(commentBody, bodyFormat, this.isCloud) } },
+    );
+    if (!response.ok) {
+      await this.throwForResponse(
+        response,
+        `update comment ${commentId} on Jira issue ${issueKey}`,
+      );
+    }
+  }
+
+  async deleteComment(issueKey: string, commentId: string): Promise<void> {
+    const response = await this.request(
+      'DELETE',
+      `/issue/${encodeURIComponent(issueKey)}/comment/${encodeURIComponent(
+        commentId,
+      )}`,
+    );
+    if (!response.ok) {
+      await this.throwForResponse(
+        response,
+        `delete comment ${commentId} on Jira issue ${issueKey}`,
+      );
+    }
+  }
+
   async listTransitions(issueKey: string): Promise<JiraTransition[]> {
     const response = await this.request(
       'GET',

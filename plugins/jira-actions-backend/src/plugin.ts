@@ -10,6 +10,10 @@ import {
   registerListSprintsAction,
   registerMoveToSprintAction,
 } from './actions/agile';
+import {
+  registerDeleteCommentAction,
+  registerUpdateCommentAction,
+} from './actions/commentEditing';
 import { registerCreateWorkItemAction } from './actions/createWorkItem';
 import { registerDeleteWorkItemAction } from './actions/deleteWorkItem';
 import { registerGetCommentsAction } from './actions/getComments';
@@ -91,6 +95,8 @@ export const jiraActionsPlugin = createBackendPlugin({
         registerSearchWorkItemsAction({ ...common, catalog });
         registerSearchUsersAction(common);
         registerAddCommentAction(common);
+        registerUpdateCommentAction(common);
+        registerDeleteCommentAction(common);
         registerAddRemoteLinkAction(common);
         registerGetRemoteLinksAction(common);
         registerLinkWorkItemsAction(common);

@@ -1,0 +1,45 @@
+apiVersion: scaffolder.backstage.io/v1beta3
+kind: Template
+metadata:
+  name: 'jira-test-delete-comment'
+  title: 'Jira Test: Delete Comment'
+  description: 'Permanently deletes a comment from a Jira work item via the jira-actions:delete-comment action.'
+  tags:
+    - jira
+    - test
+spec:
+  owner: user:guest
+  type: jira-test
+  parameters:
+    - title: Delete comment
+      required:
+        - issueKey
+        - commentId
+      properties:
+        issueKey:
+          title: 'Issue key'
+          type: string
+          description: 'The key of the issue, e.g. PROJ-123'
+        commentId:
+          title: 'Comment ID'
+          type: string
+          description: 'The ID of the comment to permanently delete'
+        host:
+          title: 'Jira host'
+          type: string
+          description: 'Only needed when multiple Jira connections are configured'
+  steps:
+    - id: invoke
+      name: 'Delete comment'
+      action: jira-actions:delete-comment
+      input:
+        issueKey: ${{ parameters.issueKey }}
+        commentId: ${{ parameters.commentId }}
+        host: ${{ parameters.host }}
+  output:
+    text:
+      - title: Result
+        content: |
+          ```json
+          ${{ steps.invoke.output | dump(2) }}
+          ```
