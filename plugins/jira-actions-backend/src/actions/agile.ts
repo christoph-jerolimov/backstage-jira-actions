@@ -26,6 +26,14 @@ export function registerListBoardsAction(options: {
       destructive: false,
       idempotent: true,
     },
+    examples: [
+      {
+        title: 'Find the boards of a project',
+        input: {
+          projectKey: 'PROJ',
+        },
+      },
+    ],
     schema: {
       input: z =>
         z.object({
@@ -102,6 +110,15 @@ export function registerListSprintsAction(options: {
       destructive: false,
       idempotent: true,
     },
+    examples: [
+      {
+        title: 'List the active sprint',
+        input: {
+          boardId: '7',
+          state: 'active',
+        },
+      },
+    ],
     schema: {
       input: z =>
         z.object({
@@ -181,6 +198,15 @@ export function registerMoveToSprintAction(options: {
       destructive: false,
       idempotent: true,
     },
+    examples: [
+      {
+        title: 'Pull issues into the sprint',
+        input: {
+          sprintId: '42',
+          issueKeys: ['PROJ-123', 'PROJ-124'],
+        },
+      },
+    ],
     schema: {
       input: z =>
         z.object({
@@ -243,6 +269,14 @@ export function registerListSprintWorkItemsAction(options: {
       destructive: false,
       idempotent: true,
     },
+    examples: [
+      {
+        title: 'See what is in the sprint',
+        input: {
+          sprintId: '42',
+        },
+      },
+    ],
     schema: {
       input: z =>
         z.object({
@@ -330,6 +364,14 @@ export function registerMoveToBacklogAction(options: {
       destructive: false,
       idempotent: true,
     },
+    examples: [
+      {
+        title: 'Send an issue back to the backlog',
+        input: {
+          issueKeys: ['PROJ-123'],
+        },
+      },
+    ],
     schema: {
       input: z =>
         z.object({
@@ -399,6 +441,16 @@ export function registerCreateSprintAction(options: {
       destructive: false,
       idempotent: false,
     },
+    examples: [
+      {
+        title: 'Create the next sprint',
+        input: {
+          boardId: '7',
+          name: 'Sprint 13',
+          goal: 'Ship the checkout revamp',
+        },
+      },
+    ],
     schema: {
       input: z =>
         z.object({
@@ -464,6 +516,15 @@ export function registerUpdateSprintAction(options: {
       destructive: false,
       idempotent: true,
     },
+    examples: [
+      {
+        title: 'Change the sprint goal',
+        input: {
+          sprintId: '42',
+          goal: 'Stabilize the release',
+        },
+      },
+    ],
     schema: {
       input: z =>
         z.object({
@@ -536,6 +597,16 @@ export function registerStartSprintAction(options: {
       destructive: false,
       idempotent: true,
     },
+    examples: [
+      {
+        title: 'Start a sprint with dates',
+        input: {
+          sprintId: '42',
+          startDate: '2026-09-01T09:00:00.000Z',
+          endDate: '2026-09-14T17:00:00.000Z',
+        },
+      },
+    ],
     schema: {
       input: z =>
         z.object({
@@ -597,6 +668,14 @@ export function registerCompleteSprintAction(options: {
       destructive: false,
       idempotent: true,
     },
+    examples: [
+      {
+        title: 'Complete the sprint',
+        input: {
+          sprintId: '42',
+        },
+      },
+    ],
     schema: {
       input: z =>
         z.object({

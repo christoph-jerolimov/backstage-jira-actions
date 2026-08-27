@@ -21,6 +21,15 @@ export function registerSetWorkItemParentAction(options: {
       destructive: false,
       idempotent: true,
     },
+    examples: [
+      {
+        title: 'Move an issue under an epic',
+        input: {
+          issueKey: 'PROJ-123',
+          parentKey: 'PROJ-1',
+        },
+      },
+    ],
     schema: {
       input: z =>
         z.object({

@@ -21,6 +21,15 @@ export function registerAddCommentAction(options: {
       destructive: false,
       idempotent: false,
     },
+    examples: [
+      {
+        title: 'Add a Markdown comment',
+        input: {
+          issueKey: 'PROJ-123',
+          body: 'Deployed to **staging**.',
+        },
+      },
+    ],
     schema: {
       input: z =>
         z.object({

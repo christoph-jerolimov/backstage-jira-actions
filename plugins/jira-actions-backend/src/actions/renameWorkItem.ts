@@ -21,6 +21,15 @@ export function registerRenameWorkItemAction(options: {
       destructive: false,
       idempotent: true,
     },
+    examples: [
+      {
+        title: 'Rename an issue',
+        input: {
+          issueKey: 'PROJ-123',
+          summary: 'Login fails on Safari 18',
+        },
+      },
+    ],
     schema: {
       input: z =>
         z.object({

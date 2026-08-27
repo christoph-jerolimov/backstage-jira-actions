@@ -21,6 +21,14 @@ export function registerListProjectsAction(options: {
       destructive: false,
       idempotent: true,
     },
+    examples: [
+      {
+        title: 'Find projects by name',
+        input: {
+          name: 'platform',
+        },
+      },
+    ],
     schema: {
       input: z =>
         z.object({

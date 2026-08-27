@@ -25,6 +25,16 @@ export function registerUpdateCommentAction(options: {
       destructive: false,
       idempotent: true,
     },
+    examples: [
+      {
+        title: 'Correct a comment',
+        input: {
+          issueKey: 'PROJ-123',
+          commentId: '10001',
+          body: 'Correction: deployed to **production**.',
+        },
+      },
+    ],
     schema: {
       input: z =>
         z.object({
@@ -104,6 +114,15 @@ export function registerDeleteCommentAction(options: {
       destructive: true,
       idempotent: false,
     },
+    examples: [
+      {
+        title: 'Delete a comment',
+        input: {
+          issueKey: 'PROJ-123',
+          commentId: '10001',
+        },
+      },
+    ],
     schema: {
       input: z =>
         z.object({

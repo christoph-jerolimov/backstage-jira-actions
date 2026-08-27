@@ -3401,6 +3401,19 @@ describe('jira work item actions', () => {
       expect(action.schema.output).toBeDefined();
     }
   });
+
+  it('declares at least one titled example on every action', async () => {
+    const { actions } = await makeRegistry([cloudConnection]).list();
+    for (const action of actions) {
+      const examples = (action as any).examples;
+      expect(examples?.length ?? 0).toBeGreaterThanOrEqual(1);
+      for (const example of examples) {
+        expect(typeof example.title).toBe('string');
+        expect(example.title.length).toBeGreaterThan(0);
+        expect(typeof example.input).toBe('object');
+      }
+    }
+  });
 });
 
 describe('markdown descriptions', () => {

@@ -40,6 +40,16 @@ export function registerUpdateWorkItemAction(options: {
       destructive: false,
       idempotent: true,
     },
+    examples: [
+      {
+        title: 'Update the summary and add a label',
+        input: {
+          issueKey: 'PROJ-123',
+          summary: 'Login fails on Safari 18',
+          addLabels: ['triaged'],
+        },
+      },
+    ],
     schema: {
       input: z =>
         z.object({

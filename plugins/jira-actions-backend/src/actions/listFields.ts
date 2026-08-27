@@ -21,6 +21,14 @@ export function registerListFieldsAction(options: {
       destructive: false,
       idempotent: true,
     },
+    examples: [
+      {
+        title: 'Find the story points field',
+        input: {
+          name: 'story points',
+        },
+      },
+    ],
     schema: {
       input: z =>
         z.object({

@@ -22,6 +22,15 @@ export function registerTransitionWorkItemAction(options: {
       destructive: false,
       idempotent: true,
     },
+    examples: [
+      {
+        title: 'Start work on an issue',
+        input: {
+          issueKey: 'PROJ-123',
+          status: 'In Progress',
+        },
+      },
+    ],
     schema: {
       input: z =>
         z.object({

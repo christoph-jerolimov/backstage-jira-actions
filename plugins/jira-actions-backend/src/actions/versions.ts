@@ -84,6 +84,14 @@ export function registerListVersionsAction(options: ProjectScopedOptions) {
       destructive: false,
       idempotent: true,
     },
+    examples: [
+      {
+        title: 'List the versions of a project',
+        input: {
+          projectKey: 'PROJ',
+        },
+      },
+    ],
     schema: {
       input: z => z.object(projectInputs(z)),
       output: z =>
@@ -147,6 +155,14 @@ export function registerListComponentsAction(options: ProjectScopedOptions) {
       destructive: false,
       idempotent: true,
     },
+    examples: [
+      {
+        title: 'List the components of a project',
+        input: {
+          projectKey: 'PROJ',
+        },
+      },
+    ],
     schema: {
       input: z => z.object(projectInputs(z)),
       output: z =>
@@ -200,6 +216,16 @@ export function registerCreateVersionAction(options: ProjectScopedOptions) {
       destructive: false,
       idempotent: false,
     },
+    examples: [
+      {
+        title: 'Create a release version',
+        input: {
+          projectKey: 'PROJ',
+          name: '1.2.0',
+          releaseDate: '2026-09-30',
+        },
+      },
+    ],
     schema: {
       input: z =>
         z.object({

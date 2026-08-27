@@ -26,6 +26,26 @@ export function registerCreateWorkItemAction(options: {
       destructive: false,
       idempotent: false,
     },
+    examples: [
+      {
+        title: 'Create a bug',
+        input: {
+          projectKey: 'PROJ',
+          issueType: 'Bug',
+          summary: 'Login fails on Safari',
+        },
+      },
+      {
+        title: 'Create a story with a Markdown description',
+        input: {
+          projectKey: 'PROJ',
+          issueType: 'Story',
+          summary: 'Add express checkout',
+          description: '## Goal\\nOne-click checkout for returning customers.',
+          labels: ['checkout'],
+        },
+      },
+    ],
     schema: {
       input: z =>
         z.object({
